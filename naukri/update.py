@@ -25,7 +25,7 @@ if not email or not password:
     exit(1)
 
 # Create timestamped folder for screenshots
-timestamp = datetime.now().strftime("%d-%m-%y %I:%M %p")
+timestamp = datetime.now().strftime("%d-%m-%y_%I-%M_%p")
 log_dir = os.path.join("Logs Screenshot", timestamp)
 os.makedirs(log_dir, exist_ok=True)
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
@@ -63,11 +63,13 @@ wait = WebDriverWait(driver, 20)
 try:
     # Step 1: Login
     driver.get("https://www.naukri.com/mnjuser/login")
-    time.sleep(5)
+    time.sleep(8)
     driver.save_screenshot(os.path.join(log_dir, "step_1_login_page.png"))
 
     # Wait for and fill email field with explicit click
     print("[🔍] Locating email field...")
+    print(f"[DEBUG] Current URL: {driver.current_url}")
+    print(f"[DEBUG] Page title: {driver.title}")
     email_field = wait.until(EC.element_to_be_clickable((By.ID, "usernameField")))
     email_field.click()
     time.sleep(1)
@@ -131,8 +133,13 @@ try:
     driver.save_screenshot(os.path.join(log_dir, "step_5_save_clicked.png"))
 
 except Exception as e:
-    print("[ERROR]:", str(e))
-    driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
+    print(f"[ERROR] {type(e).__name__}: {str(e)}")
+    print(f"[DEBUG] Current URL at error: {driver.current_url}")
+    try:
+        driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
+        print(f"[INFO] Error screenshot saved")
+    except:
+        print("[WARN] Could not save error screenshot")
 
 finally:
     driver.quit()
