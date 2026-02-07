@@ -34,7 +34,7 @@ print(f"[INFO] Screenshots will be saved in: {log_dir}")
 print("ChromeDriver path (via webdriver-manager):")
 print(ChromeDriverManager().install())
 
-# Chrome options
+# Chrome options with anti-detection
 options = Options()
 
 # Check if headless mode is requested (via env variable or for server deployment)
@@ -45,11 +45,17 @@ if headless:
 else:
     print("[INFO] Running with visible browser")
 
+# Anti-detection measures
+options.add_argument("--disable-blink-features=AutomationControlled")
 options.add_argument("--disable-gpu")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
+
+# Additional anti-bot detection
+options.add_experimental_option("excludeSwitches", ["enable-automation"])
+options.add_experimental_option('useAutomationExtension', False)
 
 # Logging
 service = Service(ChromeDriverManager().install())
@@ -59,6 +65,12 @@ service.service_args = ["--verbose"]
 # Driver
 driver = webdriver.Chrome(service=service, options=options)
 wait = WebDriverWait(driver, 20)
+
+# Remove webdriver property to avoid detection
+driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+    "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36'
+})
+driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
 try:
     # Step 1: Login
