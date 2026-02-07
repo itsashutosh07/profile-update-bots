@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ChromeDriver logs
+chromedriver.log
+
+# Screenshots (optional - uncomment if you don't want to track logs)
+# Logs Screenshot/
