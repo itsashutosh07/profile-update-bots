@@ -12,4 +12,4 @@ __pycache__/
 chromedriver.log
 
 # Screenshots (optional - uncomment if you don't want to track logs)
-# Logs Screenshot/
+Logs Screenshot/
