@@ -1,5 +1,8 @@
 # Environment variables
 .env
+gmail_credentials.txt
+token.json
+credentials.json
 
 # Python
 __pycache__/

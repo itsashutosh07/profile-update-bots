@@ -10,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
+from gmail_otp_reader import get_otp_from_gmail
 
 # Load credentials from .env file
 load_dotenv()
@@ -102,7 +103,90 @@ try:
     # Click login button
     login_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
     login_btn.click()
-    time.sleep(5)
+    time.sleep(8)
+    print("[✓] Login button clicked")
+    driver.save_screenshot(os.path.join(log_dir, "step_1_after_login_click.png"))
+    
+    # Check if OTP is required
+    try:
+        print("[🔍] Checking for OTP prompt...")
+        
+        # Look for OTP input fields - try multiple selectors
+        otp_present = False
+        otp_inputs = []
+        
+        # Common OTP field patterns
+        otp_selectors = [
+            "input[type='text'][maxlength='1']",  # Individual digit boxes
+            "input[placeholder*='OTP' i]",  # OTP placeholder
+            "input[id*='otp' i]",  # OTP in ID
+            "input[name*='otp' i]",  # OTP in name
+        ]
+        
+        for selector in otp_selectors:
+            try:
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    otp_inputs = elements
+                    otp_present = True
+                    print(f"[OTP] Found {len(elements)} OTP input fields")
+                    break
+            except:
+                continue
+        
+        if otp_present:
+            print("[OTP] OTP verification required!")
+            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
+            
+            # Get OTP from Gmail
+            print("[OTP] Fetching OTP from Gmail...")
+            otp_code = get_otp_from_gmail(sender_filter="naukri.com", max_wait_seconds=90)
+            
+            if not otp_code:
+                raise Exception("Failed to get OTP from Gmail")
+            
+            print(f"[OTP] Received OTP: {otp_code}")
+            
+            # Enter OTP
+            if len(otp_inputs) >= len(otp_code):
+                # Multiple input boxes (one digit each)
+                print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
+                for i, digit in enumerate(otp_code):
+                    if i < len(otp_inputs):
+                        otp_inputs[i].clear()
+                        otp_inputs[i].send_keys(digit)
+                        time.sleep(0.5)
+            else:
+                # Single input box
+                print("[OTP] Entering OTP in single field...")
+                otp_inputs[0].clear()
+                otp_inputs[0].send_keys(otp_code)
+            
+            print("[OTP] OTP entered")
+            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
+            
+            # Click verify/submit button
+            try:
+                verify_btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Verify') or contains(text(), 'Submit') or contains(text(), 'Continue')]"))
+                )
+                verify_btn.click()
+                print("[OTP] Verify button clicked")
+            except:
+                # OTP might auto-submit
+                print("[OTP] No verify button found (might auto-submit)")
+            
+            time.sleep(5)
+            driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
+            print("[✓] OTP verification completed")
+        else:
+            print("[OTP] No OTP required - login successful")
+    
+    except Exception as otp_error:
+        print(f"[OTP] OTP handling error: {str(otp_error)}")
+        driver.save_screenshot(os.path.join(log_dir, "step_1_otp_error.png"))
+        # Continue anyway - might not need OTP
+    
     print("[✓] Logged in")
     driver.save_screenshot(os.path.join(log_dir, "step_1_login_success.png"))
 
