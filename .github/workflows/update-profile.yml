@@ -33,14 +33,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r naukri/requirements.txt
     
-    - name: Update headless mode in script
-      run: |
-        sed -i 's/# options.add_argument("--headless=new")/options.add_argument("--headless=new")/' naukri/update.py
-    
     - name: Run update script
       env:
         NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
         NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
+        HEADLESS: "true"
       run: python3 naukri/update.py
     
     - name: Upload screenshots as artifacts
@@ -48,7 +45,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: screenshots-${{ github.run_number }}
-        path: naukri/Logs Screenshot/
+        path: Logs Screenshot/
         retention-days: 7
 
 
