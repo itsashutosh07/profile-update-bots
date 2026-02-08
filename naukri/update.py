@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 from datetime import datetime
 from dotenv import load_dotenv
 from selenium import webdriver
@@ -110,90 +111,213 @@ try:
     # Check if OTP is required
     try:
         print("[🔍] Checking for OTP prompt...")
+        print(f"[DEBUG] Current URL after login: {driver.current_url}")
+        print(f"[DEBUG] Page title after login: {driver.title}")
+        
+        # Check if page content contains OTP-related text
+        page_source = driver.page_source.lower()
+        has_otp_text = any(text in page_source for text in ['enter the otp', 'enter otp', 'otp sent', 'verification code', 'otp to login'])
+        
+        print(f"[DEBUG] OTP-related text in page: {has_otp_text}")
         
         # Look for OTP input fields - try multiple selectors
         otp_present = False
         otp_inputs = []
         
-        # Common OTP field patterns
+        # Common OTP field patterns - try them all
         otp_selectors = [
             "input[type='text'][maxlength='1']",  # Individual digit boxes
-            "input[placeholder*='OTP' i]",  # OTP placeholder
-            "input[id*='otp' i]",  # OTP in ID
-            "input[name*='otp' i]",  # OTP in name
+            "input[type='tel'][maxlength='1']",    # Tel input with maxlength 1
+            "input[placeholder*='OTP' i]",         # OTP placeholder
+            "input[id*='otp' i]",                  # OTP in ID
+            "input[name*='otp' i]",                # OTP in name
+            "input[class*='otp' i]",               # OTP in class
         ]
         
         for selector in otp_selectors:
             try:
                 elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements:
-                    otp_inputs = elements
-                    otp_present = True
-                    print(f"[OTP] Found {len(elements)} OTP input fields")
-                    break
-            except:
+                if elements and len(elements) > 0:
+                    # Filter out hidden elements
+                    visible_elements = [el for el in elements if el.is_displayed()]
+                    if visible_elements:
+                        otp_inputs = visible_elements
+                        otp_present = True
+                        print(f"[OTP] Found {len(visible_elements)} visible OTP input fields using selector: {selector}")
+                        break
+            except Exception as e:
+                print(f"[DEBUG] Error with selector {selector}: {str(e)}")
                 continue
         
-        if otp_present:
-            print("[OTP] OTP verification required!")
+        # If we found OTP text but no inputs, wait a bit more
+        if has_otp_text and not otp_present:
+            print("[OTP] OTP text found but inputs not detected yet, waiting...")
+            time.sleep(3)
+            # Try again
+            for selector in otp_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        visible_elements = [el for el in elements if el.is_displayed()]
+                        if visible_elements:
+                            otp_inputs = visible_elements
+                            otp_present = True
+                            print(f"[OTP] Found {len(visible_elements)} OTP fields on retry")
+                            break
+                except:
+                    continue
+        
+        if otp_present or has_otp_text:
+            print("[OTP] ⚠️  OTP verification required!")
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
             
             # Get OTP from Gmail
-            print("[OTP] Fetching OTP from Gmail...")
+            print("[OTP] Fetching OTP from Gmail API...")
             otp_code = get_otp_from_gmail(sender_filter="naukri.com", max_wait_seconds=90)
             
             if not otp_code:
-                raise Exception("Failed to get OTP from Gmail")
+                raise Exception("Failed to retrieve OTP from Gmail - check Gmail API credentials")
             
-            print(f"[OTP] Received OTP: {otp_code}")
+            print(f"[OTP] ✓ Received OTP: {otp_code}")
+            
+            # Re-fetch OTP inputs in case page structure changed
+            time.sleep(1)
+            for selector in otp_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        visible_elements = [el for el in elements if el.is_displayed()]
+                        if visible_elements:
+                            otp_inputs = visible_elements
+                            break
+                except:
+                    continue
             
             # Enter OTP
-            if len(otp_inputs) >= len(otp_code):
-                # Multiple input boxes (one digit each)
+            if not otp_inputs:
+                # If still no inputs found, try a more generic approach
+                print("[OTP] Trying to find OTP inputs more generically...")
+                all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel']")
+                visible_inputs = [inp for inp in all_inputs if inp.is_displayed() and inp.get_attribute('maxlength') == '1']
+                if visible_inputs:
+                    otp_inputs = visible_inputs
+                    print(f"[OTP] Found {len(otp_inputs)} generic OTP fields")
+            
+            if len(otp_inputs) >= 6 and len(otp_code) == 6:
+                # Multiple input boxes (one digit each) - Naukri's style
                 print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
                 for i, digit in enumerate(otp_code):
                     if i < len(otp_inputs):
-                        otp_inputs[i].clear()
-                        otp_inputs[i].send_keys(digit)
-                        time.sleep(0.5)
-            else:
-                # Single input box
+                        try:
+                            # Click to focus
+                            otp_inputs[i].click()
+                            time.sleep(0.3)
+                            # Clear and enter
+                            otp_inputs[i].clear()
+                            otp_inputs[i].send_keys(digit)
+                            print(f"[OTP] Entered digit {i+1}")
+                            time.sleep(0.5)
+                        except Exception as e:
+                            print(f"[OTP] Error entering digit {i+1}: {str(e)}")
+            elif otp_inputs:
+                # Single input box fallback
                 print("[OTP] Entering OTP in single field...")
+                otp_inputs[0].click()
+                time.sleep(0.5)
                 otp_inputs[0].clear()
                 otp_inputs[0].send_keys(otp_code)
+            else:
+                print("[OTP] ⚠️  No OTP input fields found - trying direct page interaction")
+                # Last resort - try to find any input and send keys
+                time.sleep(2)
             
-            print("[OTP] OTP entered")
+            print("[OTP] OTP entered, saving screenshot...")
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
             
             # Click verify/submit button
-            try:
-                verify_btn = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Verify') or contains(text(), 'Submit') or contains(text(), 'Continue')]"))
-                )
-                verify_btn.click()
-                print("[OTP] Verify button clicked")
-            except:
-                # OTP might auto-submit
-                print("[OTP] No verify button found (might auto-submit)")
+            time.sleep(2)
+            verify_button_found = False
+            verify_selectors = [
+                "//button[contains(translate(text(), 'VERIFY', 'verify'), 'verify')]",
+                "//button[contains(translate(text(), 'SUBMIT', 'submit'), 'submit')]",
+                "//button[contains(translate(text(), 'CONTINUE', 'continue'), 'continue')]",
+                "//button[@type='submit']",
+                "//input[@type='submit']",
+            ]
             
-            time.sleep(5)
+            for selector in verify_selectors:
+                try:
+                    verify_btn = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.XPATH, selector))
+                    )
+                    verify_btn.click()
+                    print(f"[OTP] Verify button clicked using selector: {selector}")
+                    verify_button_found = True
+                    break
+                except:
+                    continue
+            
+            if not verify_button_found:
+                print("[OTP] No verify button found - OTP might auto-submit")
+                # Press Enter on last OTP input as fallback
+                if otp_inputs:
+                    try:
+                        otp_inputs[-1].send_keys(Keys.RETURN)
+                        print("[OTP] Pressed Enter on last OTP field")
+                    except:
+                        pass
+            
+            time.sleep(8)
             driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
-            print("[✓] OTP verification completed")
+            print(f"[DEBUG] URL after OTP: {driver.current_url}")
+            print(f"[DEBUG] Title after OTP: {driver.title}")
+            
+            # Check if we're actually logged in
+            if "login" in driver.current_url.lower():
+                print("[OTP] ⚠️  Still on login page after OTP - verification may have failed")
+                driver.save_screenshot(os.path.join(log_dir, "step_1_otp_verification_failed.png"))
+            else:
+                print("[✓] OTP verification completed successfully")
         else:
-            print("[OTP] No OTP required - login successful")
+            print("[OTP] ⚠️  No OTP fields detected")
+            print(f"[DEBUG] Checked {len(otp_selectors)} different OTP selectors")
+            print(f"[DEBUG] Has OTP text on page: {has_otp_text}")
+            if "login" in driver.current_url.lower():
+                print("[OTP] ⚠️  WARNING: Still on login page but no OTP detected!")
+                print("[OTP] This likely means OTP verification is needed but wasn't detected")
     
     except Exception as otp_error:
-        print(f"[OTP] OTP handling error: {str(otp_error)}")
+        print(f"[OTP] ❌ OTP handling error: {str(otp_error)}")
+        print(f"[OTP] Traceback: {traceback.format_exc()}")
         driver.save_screenshot(os.path.join(log_dir, "step_1_otp_error.png"))
-        # Continue anyway - might not need OTP
+        print("[OTP] Continuing anyway...")
     
-    print("[✓] Logged in")
+    # Verify login was successful
+    print("[🔍] Verifying login status...")
+    time.sleep(3)
+    current_url = driver.current_url
+    print(f"[DEBUG] Final URL after login: {current_url}")
+    
+    if "login" in current_url.lower() and "profile" not in current_url:
+        print("[ERROR] ❌ Still on login page - login failed!")
+        driver.save_screenshot(os.path.join(log_dir, "step_1_login_failed.png"))
+        raise Exception("Login failed - still on login page. OTP may not have been handled correctly.")
+    
+    print("[✓] Login verification passed")
     driver.save_screenshot(os.path.join(log_dir, "step_1_login_success.png"))
 
     # Step 2: Profile
+    print("[→] Navigating to profile page...")
     driver.get("https://www.naukri.com/mnjuser/profile")
-    print("[→] Navigated to profile page")
-    time.sleep(5)
+    time.sleep(8)
+    
+    # Verify we're on profile page
+    if "profile" not in driver.current_url.lower():
+        print(f"[WARN] ⚠️  Not on profile page. Current URL: {driver.current_url}")
+        driver.save_screenshot(os.path.join(log_dir, "step_2_not_on_profile.png"))
+    else:
+        print("[✓] Successfully reached profile page")
+    
     driver.save_screenshot(os.path.join(log_dir, "step_2_profile_page.png"))
     time.sleep(3)
 
