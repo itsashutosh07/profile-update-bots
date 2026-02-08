@@ -156,6 +156,11 @@
             perspective: 1000px;
             height: auto;
             min-height: 250px;
+            transition: all 0.4s ease-in-out;
+        }
+
+        .run-card-container.expanded {
+            min-height: auto;
         }
 
         .run-card {
@@ -170,6 +175,7 @@
 
         .run-card.flipped {
             transform: rotateY(180deg);
+            min-height: auto;
         }
 
         .card-face {
@@ -187,6 +193,7 @@
         .card-front {
             z-index: 2;
             transition: border-color 0.2s;
+            height: 250px;
         }
 
         .run-card-container:hover .card-front {
@@ -198,7 +205,19 @@
             transform: rotateY(180deg);
             z-index: 1;
             overflow-y: auto;
-            max-height: 500px;
+            height: auto;
+            min-height: 250px;
+        }
+
+        /* Smooth height transition for mobile */
+        @media (max-width: 768px) {
+            .run-card-container {
+                margin-bottom: 10px;
+            }
+            
+            .run-card-container.expanded {
+                margin-bottom: 20px;
+            }
         }
 
         .run-header {
@@ -946,16 +965,30 @@
         // Flip card and load details
         async function flipCard(cardId, runId) {
             const card = document.getElementById(cardId);
+            const container = card.parentElement;
             const isFlipped = card.classList.contains('flipped');
 
             if (isFlipped) {
                 // Flip back to front
                 card.classList.remove('flipped');
+                container.classList.remove('expanded');
                 return;
             }
 
             // Flip to back
             card.classList.add('flipped');
+            container.classList.add('expanded');
+            
+            // Smooth scroll into view on mobile for better UX
+            setTimeout(() => {
+                if (window.innerWidth <= 768) {
+                    container.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'nearest',
+                        inline: 'nearest'
+                    });
+                }
+            }, 100);
 
             // Fetch and render back side
             const backEl = document.getElementById(`${cardId}-back`);
@@ -1096,7 +1129,10 @@
                 }
 
                 const data = await response.json();
-                const runs = data.workflow_runs || [];
+                let runs = data.workflow_runs || [];
+
+                // Filter to only show "Update Naukri Profile" workflow runs
+                runs = runs.filter(run => run.name === 'Update Naukri Profile');
 
                 if (runs.length === 0) {
                     contentDiv.innerHTML = `
