@@ -334,12 +334,21 @@ try:
             else:
                 print("[✓] OTP verification completed successfully")
         else:
-            print("[OTP] ⚠️  No OTP fields detected")
+            print("[OTP] ℹ️  No OTP fields detected")
             print(f"[DEBUG] Checked {len(otp_selectors)} different OTP selectors")
             print(f"[DEBUG] Has OTP text on page: {has_otp_text}")
-            if "login" in driver.current_url.lower():
+            
+            # Check if we might be logged in already
+            page_source_check = driver.page_source.lower()
+            if any(indicator in page_source_check for indicator in ['naukri360', 'my naukri', 'mynaukri']):
+                print("[OTP] ✅ No OTP required - looks like you're already logged in (existing session)")
+            elif "login" in driver.current_url.lower():
                 print("[OTP] ⚠️  WARNING: Still on login page but no OTP detected!")
-                print("[OTP] This likely means OTP verification is needed but wasn't detected")
+                print("[OTP] This might mean:")
+                print("[OTP]   • Already logged in with existing session (local dev)")
+                print("[OTP]   • OTP verification needed but wasn't detected (check screenshots)")
+            else:
+                print("[OTP] ✅ No OTP required - login successful")
     
     except Exception as otp_error:
         print(f"[OTP] ❌ OTP handling error: {str(otp_error)}")
