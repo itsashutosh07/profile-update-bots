@@ -1008,15 +1008,12 @@
                         </div>
 
                         <div style="text-align: center; margin: 12px 0; font-size: 0.8rem; color: #6b7280;">
-                            💡 Tip: Click card again to flip back
+                            💡 Tip: Click card to flip back
                         </div>
 
-                        <div class="back-footer">
-                            <button class="back-btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('${cardId}').classList.remove('flipped')" title="Click card to flip back">
-                                ← Back to List
-                            </button>
-                            <button class="back-btn btn-primary" onclick="event.stopPropagation(); window.open('${run?.html_url}', '_blank')" title="Open full workflow logs on GitHub">
-                                View Complete Logs →
+                        <div class="back-footer" style="justify-content: center;">
+                            <button class="back-btn btn-primary" onclick="event.stopPropagation(); window.open('${run?.html_url}', '_blank')" title="Open full workflow logs on GitHub" style="width: auto; padding: 12px 24px;">
+                                📋 View Complete Logs →
                             </button>
                         </div>
                     </div>
@@ -1028,10 +1025,8 @@
                             <strong>Error Loading Details</strong>
                             <p style="margin-top: 8px;">${error.message}</p>
                         </div>
-                        <div class="back-footer">
-                            <button class="back-btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('${cardId}').classList.remove('flipped')">
-                                ← Back
-                            </button>
+                        <div style="text-align: center; margin-top: 15px; font-size: 0.85rem; color: #9ca3af;">
+                            💡 Click card to flip back
                         </div>
                     </div>
                 `;
