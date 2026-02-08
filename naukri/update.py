@@ -507,7 +507,7 @@ except Exception as e:
     print(f"[DEBUG] Current URL at error: {driver.current_url}")
     
     try:
-    driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
+        driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
         print(f"[INFO] Error screenshot saved")
     except:
         print("[WARN] Could not save error screenshot")
