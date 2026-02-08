@@ -1,1 +1,14 @@
-dashboard/.DS_Store
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Sensitive credentials
+**/gmail_credentials.txt
+**/.env
+**/credentials.json
+**/token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.so

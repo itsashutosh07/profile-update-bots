@@ -28,6 +28,18 @@ if not email or not password:
     print("NAUKRI_PASSWORD=your_password")
     exit(1)
 
+# Security: Basic email format validation
+import re
+if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+    print(f"[ERROR] Invalid email format: {email}")
+    print("Please provide a valid email address")
+    exit(1)
+
+# Security: Validate password strength (minimum length)
+if len(password) < 8:
+    print("[WARNING] Password is very short. Consider using a stronger password.")
+    print("[INFO] Continuing anyway...")
+
 # Create timestamped folder for screenshots
 timestamp = datetime.now().strftime("%d-%m-%y_%I-%M_%p")
 log_dir = os.path.join("Logs Screenshot", timestamp)

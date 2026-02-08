@@ -158,10 +158,14 @@ class GmailOTPReader:
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                return match.group(1)
+                otp = match.group(1)
+                # Security: Validate OTP is exactly 4-6 digits
+                if len(otp) >= 4 and len(otp) <= 6 and otp.isdigit():
+                    return otp
         
         # Last resort: find any 6-digit number (be careful with this)
-        match = re.search(r'\b(\d{6})\b', text)
+        # Only return if it's actually 6 digits and not part of a longer number
+        match = re.search(r'(?<!\d)(\d{6})(?!\d)', text)
         if match:
             return match.group(1)
         

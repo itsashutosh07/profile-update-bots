@@ -103,17 +103,27 @@ def get_refresh_token():
         print("\n⚠️  KEEP THESE SECURE! Don't share them publicly.")
         print("="*70 + "\n")
         
-        # Optionally save to a file
-        save = input("💾 Save to file 'gmail_credentials.txt'? (y/n): ").strip().lower()
-        if save == 'y':
+        # Optionally save to a file (with strong security warning)
+        print("\n" + "="*70)
+        print("⚠️  SECURITY WARNING")
+        print("="*70)
+        print("Saving credentials to a file is a SECURITY RISK!")
+        print("The file will contain sensitive tokens that could compromise your account.")
+        print("Only save if you will DELETE the file immediately after use.")
+        print("="*70)
+        save = input("\n💾 Still want to save to 'gmail_credentials.txt'? (yes/NO): ").strip().lower()
+        if save == 'yes':
             with open('gmail_credentials.txt', 'w') as f:
-                f.write("Gmail API Credentials\n")
+                f.write("# ⚠️  DELETE THIS FILE AFTER COPYING TO GITHUB SECRETS!\n")
+                f.write("# DO NOT COMMIT THIS FILE TO GIT!\n")
+                f.write("# DO NOT SHARE THIS FILE!\n")
                 f.write("="*50 + "\n\n")
                 f.write(f"GMAIL_CLIENT_ID={creds.client_id}\n")
                 f.write(f"GMAIL_CLIENT_SECRET={creds.client_secret}\n")
                 f.write(f"GMAIL_REFRESH_TOKEN={creds.refresh_token}\n")
             print("\n✅ Saved to: gmail_credentials.txt")
-            print("⚠️  Remember to delete this file after copying to GitHub!")
+            print("🚨 CRITICAL: DELETE THIS FILE IMMEDIATELY AFTER COPYING!")
+            print("⚠️  Check that gmail_credentials.txt is in .gitignore")
         
     except Exception as e:
         print("\n" + "="*70)
