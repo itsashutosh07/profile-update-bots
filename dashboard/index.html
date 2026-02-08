@@ -433,6 +433,10 @@
             flex-direction: column;
             gap: 15px;
             width: 100%;
+        }
+        
+        /* Only apply min-height to detailed content (not errors) */
+        .back-content:has(.back-header) {
             min-height: 250px;
         }
 
