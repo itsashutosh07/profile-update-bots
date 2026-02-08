@@ -151,21 +151,54 @@
             margin-bottom: 40px;
         }
 
+        /* Flip Card Container */
+        .run-card-container {
+            perspective: 1000px;
+            height: auto;
+            min-height: 250px;
+        }
+
         .run-card {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 250px;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .run-card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            min-height: 250px;
+            backface-visibility: hidden;
             background: #2d2d2d;
             border-radius: 12px;
             padding: 20px;
             border: 1px solid #3a3a3a;
-            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
 
-        .run-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        .card-front {
+            z-index: 2;
+            transition: border-color 0.2s;
+        }
+
+        .run-card-container:hover .card-front {
             border-color: #667eea;
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
+            z-index: 1;
+            overflow-y: auto;
+            max-height: 500px;
         }
 
         .run-header {
@@ -306,6 +339,124 @@
             color: #8b9efe;
         }
 
+        /* Card Back Styles */
+        .back-content {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .back-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .back-status {
+            font-size: 1.3rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-icon-large {
+            font-size: 1.5rem;
+        }
+
+        .back-details {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .detail-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #9ca3af;
+            min-width: 120px;
+        }
+
+        .detail-value {
+            color: #e0e0e0;
+            flex: 1;
+        }
+
+        .error-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            color: #ef4444;
+        }
+
+        .success-box {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            color: #10b981;
+        }
+
+        .warning-box {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            color: #fbbf24;
+        }
+
+        .back-footer {
+            display: flex;
+            gap: 10px;
+            padding-top: 12px;
+            border-top: 1px solid #3a3a3a;
+        }
+
+        .back-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #4a4a4a;
+        }
+
+        .loading-back {
+            text-align: center;
+            padding: 40px 20px;
+            color: #9ca3af;
+        }
+
         /* Error State */
         .error {
             background: rgba(239, 68, 68, 0.1);
@@ -417,8 +568,8 @@
 
         <!-- Footer -->
         <div class="footer">
-            Powered by <a href="https://github.com" target="_blank">GitHub Actions</a> | 
-            <a href="https://github.com/itsashutosh07/profile-update-bots" target="_blank">View Repository</a>
+            Powered by <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub Actions</a> | 
+            <a href="https://github.com/itsashutosh07/profile-update-bots" target="_blank" rel="noopener noreferrer">View Repository</a>
             <br>
             Made with ❤️ by Ashutosh Jaiswal
         </div>
@@ -582,75 +733,238 @@
             return 'status-skipped';
         }
 
-        // Create run card element
-        async function createRunCard(run) {
+        // Parse detailed status from job steps
+        function parseDetailedStatus(jobs) {
+            if (!jobs || jobs.length === 0) {
+                return {
+                    actualStatus: 'Unknown',
+                    statusIcon: '❓',
+                    statusClass: 'warning-box',
+                    description: 'Could not fetch job details',
+                    errorInfo: null
+                };
+            }
+
+            const updateJob = jobs.find(j => j.name === 'update');
+            if (!updateJob) {
+                return {
+                    actualStatus: 'Unknown Job',
+                    statusIcon: '❓',
+                    statusClass: 'warning-box',
+                    description: 'Update job not found in workflow',
+                    errorInfo: null
+                };
+            }
+
+            // Check for "Check run status" step
+            const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
+            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
+            
+            // Find failed steps
+            const failedSteps = updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
+
+            if (statusCheckStep && statusCheckStep.conclusion === 'success') {
+                if (updateStep && updateStep.conclusion === 'success') {
+                    return {
+                        actualStatus: 'Success',
+                        statusIcon: '✅',
+                        statusClass: 'success-box',
+                        description: 'Profile headline was successfully updated on Naukri.com',
+                        errorInfo: null
+                    };
+                } else {
+                    return {
+                        actualStatus: 'Rate Limited',
+                        statusIcon: '🕒',
+                        statusClass: 'warning-box',
+                        description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
+                        errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                    };
+                }
+            } else if (statusCheckStep && statusCheckStep.conclusion === 'failure') {
+                const errorDetails = failedSteps.map(s => `Step "${s.name}" failed`).join(', ');
+                return {
+                    actualStatus: 'Failed',
+                    statusIcon: '❌',
+                    statusClass: 'error-box',
+                    description: 'The profile update script encountered an error and failed to complete.',
+                    errorInfo: errorDetails || 'Check the complete logs for detailed error information'
+                };
+            } else if (updateStep) {
+                if (updateStep.conclusion === 'success') {
+                    return {
+                        actualStatus: 'Completed',
+                        statusIcon: '✓',
+                        statusClass: 'success-box',
+                        description: 'Workflow completed successfully',
+                        errorInfo: null
+                    };
+                } else if (updateStep.conclusion === 'failure') {
+                    const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
+                    return {
+                        actualStatus: 'Failed',
+                        statusIcon: '❌',
+                        statusClass: 'error-box',
+                        description: 'Script execution failed',
+                        errorInfo: `Failed steps: ${errorDetails || 'Unknown'}. Check complete logs for stack trace.`
+                    };
+                }
+            }
+
+            // Fallback
+            if (updateJob.conclusion === 'success') {
+                return {
+                    actualStatus: 'Success',
+                    statusIcon: '✅',
+                    statusClass: 'success-box',
+                    description: 'Workflow completed successfully',
+                    errorInfo: null
+                };
+            } else {
+                return {
+                    actualStatus: 'Failed',
+                    statusIcon: '❌',
+                    statusClass: 'error-box',
+                    description: 'Workflow failed',
+                    errorInfo: 'Check complete logs for error details'
+                };
+            }
+        }
+
+        // Create run card element with flip functionality
+        function createRunCard(run, index) {
             const statusClass = getStatusClass(run.status, run.conclusion);
             const statusText = getStatusText(run.status, run.conclusion);
             const duration = run.updated_at && run.created_at 
                 ? new Date(run.updated_at) - new Date(run.created_at)
                 : null;
 
-            // Get trigger info
             const triggerInfo = getTriggerInfo(run.event, run.triggering_actor?.login || 'github');
-
-            // Try to fetch job details for better status
-            const jobs = await fetchJobDetails(run.id);
-            const actualStatus = detectActualStatus(jobs);
-
-            // Status message (if any) with appropriate styling
-            let statusMessage = '';
-            if (actualStatus.message) {
-                let bgColor = 'rgba(255, 255, 255, 0.05)';
-                let borderColor = 'transparent';
-                
-                if (actualStatus.status === 'rate-limited') {
-                    bgColor = 'rgba(251, 191, 36, 0.1)';
-                    borderColor = 'rgba(251, 191, 36, 0.3)';
-                } else if (actualStatus.status === 'success-verified') {
-                    bgColor = 'rgba(16, 185, 129, 0.1)';
-                    borderColor = 'rgba(16, 185, 129, 0.3)';
-                } else if (actualStatus.status === 'failure') {
-                    bgColor = 'rgba(239, 68, 68, 0.1)';
-                    borderColor = 'rgba(239, 68, 68, 0.3)';
-                }
-                
-                statusMessage = `
-                    <div style="margin-top: 10px; padding: 8px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; font-size: 0.85rem; color: #e0e0e0;">
-                        ${actualStatus.message}
-                    </div>
-                `;
-            }
+            const cardId = `card-${run.id}`;
 
             return `
-                <div class="run-card" onclick="window.open('${run.html_url}', '_blank')">
-                    <div class="run-header">
-                        <span class="run-number">#${run.run_number}</span>
-                        <span class="status-badge ${statusClass}">${statusText}</span>
-                    </div>
-                    <div class="run-info">
-                        <div class="workflow-name">${run.name}</div>
-                        <div class="run-details">
-                            <span class="run-detail" title="Trigger type">
-                                ${triggerInfo.icon} ${triggerInfo.text}
-                            </span>
-                            <span class="run-detail" title="Duration">
-                                <svg fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
-                                    <path d="M7.5 3.5v5h4"/>
-                                </svg>
-                                ${formatDuration(duration)}
-                            </span>
+                <div class="run-card-container">
+                    <div class="run-card" id="${cardId}" onclick="flipCard('${cardId}', ${run.id})">
+                        <!-- Front Side -->
+                        <div class="card-face card-front">
+                            <div class="run-header">
+                                <span class="run-number">#${run.run_number}</span>
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                            </div>
+                            <div class="run-info">
+                                <div class="workflow-name">${run.name}</div>
+                                <div class="run-details">
+                                    <span class="run-detail" title="Trigger type">
+                                        ${triggerInfo.icon} ${triggerInfo.text}
+                                    </span>
+                                    <span class="run-detail" title="Duration">
+                                        <svg fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
+                                            <path d="M7.5 3.5v5h4"/>
+                                        </svg>
+                                        ${formatDuration(duration)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="run-meta">
+                                <span class="run-time">${formatRelativeTime(run.created_at)}</span>
+                                <span class="view-link">Click to view details →</span>
+                            </div>
                         </div>
-                        ${statusMessage}
-                    </div>
-                    <div class="run-meta">
-                        <span class="run-time">${formatRelativeTime(run.created_at)}</span>
-                        <a href="${run.html_url}" class="view-link" onclick="event.stopPropagation()">
-                            View Logs →
-                        </a>
+
+                        <!-- Back Side -->
+                        <div class="card-face card-back" id="${cardId}-back">
+                            <div class="loading-back">
+                                <div class="spinner"></div>
+                                <p>Loading details...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
+        }
+
+        // Flip card and load details
+        async function flipCard(cardId, runId) {
+            const card = document.getElementById(cardId);
+            const isFlipped = card.classList.contains('flipped');
+
+            if (isFlipped) {
+                // Flip back to front
+                card.classList.remove('flipped');
+                return;
+            }
+
+            // Flip to back
+            card.classList.add('flipped');
+
+            // Fetch and render back side
+            const backEl = document.getElementById(`${cardId}-back`);
+            
+            try {
+                const jobs = await fetchJobDetails(runId);
+                const details = parseDetailedStatus(jobs);
+                
+                // Get run info
+                const runs = JSON.parse(sessionStorage.getItem('cachedRuns') || '[]');
+                const run = runs.find(r => r.id === runId);
+
+                backEl.innerHTML = `
+                    <div class="back-content">
+                        <div class="back-header">
+                            <div class="back-status">
+                                <span class="status-icon-large">${details.statusIcon}</span>
+                                <span>${details.actualStatus}</span>
+                            </div>
+                            <span style="font-size: 0.9rem; color: #9ca3af;">#${run?.run_number || '?'}</span>
+                        </div>
+
+                        <div class="back-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Workflow:</span>
+                                <span class="detail-value">${run?.name || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Triggered:</span>
+                                <span class="detail-value">${formatRelativeTime(run?.created_at)}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Duration:</span>
+                                <span class="detail-value">${formatDuration(run?.updated_at && run?.created_at ? new Date(run.updated_at) - new Date(run.created_at) : null)}</span>
+                            </div>
+                        </div>
+
+                        <div class="${details.statusClass}">
+                            <strong>${details.actualStatus}</strong>
+                            <p style="margin-top: 8px; margin-bottom: 0;">${details.description}</p>
+                            ${details.errorInfo ? `<p style="margin-top: 8px; margin-bottom: 0; font-size: 0.85rem;"><strong>Details:</strong> ${details.errorInfo}</p>` : ''}
+                        </div>
+
+                        <div class="back-footer">
+                            <button class="back-btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('${cardId}').classList.remove('flipped')">
+                                ← Back to List
+                            </button>
+                            <button class="back-btn btn-primary" onclick="event.stopPropagation(); window.open('${run?.html_url}', '_blank')">
+                                View Complete Logs
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                backEl.innerHTML = `
+                    <div class="back-content">
+                        <div class="error-box">
+                            <strong>Error Loading Details</strong>
+                            <p style="margin-top: 8px;">${error.message}</p>
+                        </div>
+                        <div class="back-footer">
+                            <button class="back-btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('${cardId}').classList.remove('flipped')">
+                                ← Back
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // Calculate statistics
@@ -711,12 +1025,17 @@
                         </div>
                     `;
                 } else {
+                    // Sort runs by creation date (most recent first)
+                    runs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+                    // Store runs in session storage for card flip access
+                    sessionStorage.setItem('cachedRuns', JSON.stringify(runs));
+
                     // Update stats
                     updateStats(runs);
 
-                    // Create runs grid (await all async card creations)
-                    const runCards = await Promise.all(runs.map(run => createRunCard(run)));
-                    const runsHTML = runCards.join('');
+                    // Create runs grid (synchronous now)
+                    const runsHTML = runs.map((run, index) => createRunCard(run, index)).join('');
                     contentDiv.innerHTML = `<div class="runs-grid">${runsHTML}</div>`;
 
                     // Update last updated time
