@@ -4,9 +4,6 @@ gmail_credentials.txt
 token.json
 credentials.json
 
-# Local copy with real credentials (if you make one)
-get_gmail_token_local.py
-
 # Python
 __pycache__/
 *.py[cod]
