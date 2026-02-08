@@ -853,16 +853,29 @@
                 };
             }
 
-            // Check for "Check run status" step (new runs have this)
+            // Check for workflow steps
             const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
             const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
+            const rateLimitMarker = updateJob.steps?.find(s => s.name === 'Mark as Rate Limited');
             
             // Find failed steps
             const failedSteps = updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
 
+            // NEW RUNS: Check for rate limit marker step (most reliable)
+            if (rateLimitMarker) {
+                return {
+                    actualStatus: 'Rate Limited',
+                    statusIcon: '🕒',
+                    statusClass: 'warning-box',
+                    description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
+                    errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                };
+            }
+
             // NEW RUNS: Have "Check run status" step
             if (statusCheckStep) {
                 if (statusCheckStep.conclusion === 'success') {
+                    // If status check succeeded and we don't have rate limit marker, it's a true success
                     if (updateStep && updateStep.conclusion === 'success') {
                         return {
                             actualStatus: 'Success',
@@ -872,13 +885,13 @@
                             errorInfo: null
                         };
                     } else {
-                        // Status check passed but update had issues = Rate limited
+                        // Shouldn't happen, but fallback to completed status
                         return {
-                            actualStatus: 'Rate Limited',
-                            statusIcon: '🕒',
-                            statusClass: 'warning-box',
-                            description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
-                            errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                            actualStatus: 'Completed',
+                            statusIcon: '✅',
+                            statusClass: 'success-box',
+                            description: 'Workflow completed successfully',
+                            errorInfo: null
                         };
                     }
                 } else if (statusCheckStep.conclusion === 'failure') {

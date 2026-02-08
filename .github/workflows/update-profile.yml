@@ -51,6 +51,7 @@ jobs:
         exit $EXIT_CODE
     
     - name: Check run status
+      id: status_check
       if: always()
       run: |
         echo "=== Run Status Check ==="
@@ -70,6 +71,9 @@ jobs:
           
           echo "Status: $STATUS"
           echo "Message: $MESSAGE"
+          
+          # Store status for next step
+          echo "BOT_STATUS=$STATUS" >> $GITHUB_ENV
           
           case "$STATUS" in
             "SUCCESS")
@@ -94,6 +98,12 @@ jobs:
             exit 1
           fi
         fi
+    
+    - name: Mark as Rate Limited
+      if: always() && env.BOT_STATUS == 'RATE_LIMITED'
+      run: |
+        echo "🕒 This run was rate limited by Naukri.com"
+        echo "The dashboard will detect this step to show accurate status"
     
     - name: Upload screenshots as artifacts
       if: always()
