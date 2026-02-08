@@ -946,43 +946,51 @@
                 };
             }
 
-            // ENHANCED: Check status file output in "Check run status" step
-            // If both steps succeeded but we see rate limiting indicators, it's rate limited
-            if (statusCheckStep && statusCheckStep.conclusion === 'success' && 
-                updateStep && updateStep.conclusion === 'success') {
+            // ENHANCED: Check if both "Run update script" and "Check run status" steps succeeded
+            // This means the workflow completed successfully (either SUCCESS or RATE_LIMITED gracefully)
+            if (statusCheckStep && updateStep) {
+                // If BOTH steps succeeded, it means:
+                // - Either profile was updated successfully (SUCCESS in status file)
+                // - OR it was rate limited and exited gracefully (RATE_LIMITED in status file, exit code 0)
+                //
+                // The "Mark as Rate Limited" step will ONLY run if status was RATE_LIMITED
+                // So if that step exists, it's definitely rate limited
+                // If that step doesn't exist and both succeeded, it's a SUCCESS
                 
-                // Check if the status check step has "RATE_LIMITED" in its logs
-                // This works for runs #15 and #16 which have the status file
-                const statusCheckLogs = statusCheckStep.name?.toLowerCase() || '';
-                
-                // Since we can't access logs directly via API, we use a heuristic:
-                // If BOTH steps succeeded, assume it's truly successful (best case)
-                // The marker step in future runs will make this explicit
-                
-                // For now, check if update step completed suspiciously fast (< 30 seconds = likely rate limited)
-                const updateStarted = new Date(updateStep.started_at);
-                const updateCompleted = new Date(updateStep.completed_at);
-                const updateDuration = (updateCompleted - updateStarted) / 1000; // in seconds
-                
-                // Rate limit happens quickly (< 30s), real updates take longer (> 45s typically)
-                if (updateDuration < 35) {
+                if (statusCheckStep.conclusion === 'success' && updateStep.conclusion === 'success') {
+                    // Both succeeded - this is a SUCCESS (the bot completed its task)
+                    // Rate limited runs will be caught by the "Mark as Rate Limited" step above
                     return {
-                        actualStatus: 'Rate Limited',
-                        statusIcon: '🕒',
-                        statusClass: 'warning-box',
-                        description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
-                        errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                        actualStatus: 'Success',
+                        statusIcon: '✅',
+                        statusClass: 'success-box',
+                        description: 'Profile headline was successfully updated on Naukri.com',
+                        errorInfo: null
                     };
                 }
                 
-                // Longer duration = likely real update
-                return {
-                    actualStatus: 'Success',
-                    statusIcon: '✅',
-                    statusClass: 'success-box',
-                    description: 'Profile headline was successfully updated on Naukri.com',
-                    errorInfo: null
-                };
+                // If update step succeeded but status check failed, that's a true failure
+                if (updateStep.conclusion === 'success' && statusCheckStep.conclusion === 'failure') {
+                    return {
+                        actualStatus: 'Failed',
+                        statusIcon: '❌',
+                        statusClass: 'error-box',
+                        description: 'The profile update script encountered an error and failed to complete.',
+                        errorInfo: 'The script ran but reported a failure status. Check complete logs for error details.'
+                    };
+                }
+                
+                // If update step failed (exit code != 0), it's definitely a failure
+                if (updateStep.conclusion === 'failure') {
+                    const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
+                    return {
+                        actualStatus: 'Failed',
+                        statusIcon: '❌',
+                        statusClass: 'error-box',
+                        description: 'Script execution failed with an error',
+                        errorInfo: `Failed steps: ${errorDetails || 'Run update script'}. Check complete logs for stack trace and error details.`
+                    };
+                }
             }
             
             // If status check exists but update step didn't succeed
