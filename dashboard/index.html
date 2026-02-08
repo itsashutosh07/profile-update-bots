@@ -419,6 +419,8 @@
         <div class="footer">
             Powered by <a href="https://github.com" target="_blank">GitHub Actions</a> | 
             <a href="https://github.com/itsashutosh07/profile-update-bots" target="_blank">View Repository</a>
+            <br>
+            Made with ❤️ by Ashutosh Jaiswal
         </div>
     </div>
 
@@ -427,6 +429,9 @@
         const GITHUB_OWNER = 'itsashutosh07';
         const GITHUB_REPO = 'profile-update-bots';
         const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=30`;
+
+        // Cache for job details to avoid repeated API calls
+        const jobDetailsCache = new Map();
 
         // Utility: Format relative time
         function formatRelativeTime(dateString) {
@@ -457,6 +462,79 @@
             return `${seconds}s`;
         }
 
+        // Fetch job details for a run
+        async function fetchJobDetails(runId) {
+            if (jobDetailsCache.has(runId)) {
+                return jobDetailsCache.get(runId);
+            }
+
+            try {
+                const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/jobs`);
+                if (response.ok) {
+                    const data = await response.json();
+                    jobDetailsCache.set(runId, data.jobs);
+                    return data.jobs;
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch job details for run ${runId}:`, error);
+            }
+            return null;
+        }
+
+        // Detect actual status from job steps
+        function detectActualStatus(jobs) {
+            if (!jobs || jobs.length === 0) {
+                return { status: 'unknown', message: null };
+            }
+
+            // Find the main update job
+            const updateJob = jobs.find(j => j.name === 'update');
+            if (!updateJob) {
+                return { status: 'unknown', message: null };
+            }
+
+            // Find the "Run update script" step
+            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script' || s.name.includes('update'));
+            
+            if (updateStep) {
+                // Check step conclusion
+                if (updateStep.conclusion === 'success') {
+                    // Success - but could be rate limited (graceful exit)
+                    // We can't read logs without auth, so we show success with note
+                    return { 
+                        status: 'success', 
+                        message: 'Check logs to verify if profile was actually updated or rate limited'
+                    };
+                } else if (updateStep.conclusion === 'failure') {
+                    return { 
+                        status: 'failure', 
+                        message: 'Script execution failed - check logs for details'
+                    };
+                }
+            }
+
+            // Fallback to workflow conclusion
+            if (updateJob.conclusion === 'success') {
+                return { status: 'success', message: 'Workflow completed successfully' };
+            } else if (updateJob.conclusion === 'failure') {
+                return { status: 'failure', message: 'Workflow failed' };
+            }
+
+            return { status: 'unknown', message: null };
+        }
+
+        // Get trigger type icon and text
+        function getTriggerInfo(event, actor) {
+            if (event === 'schedule') {
+                return { icon: '🤖', text: 'Scheduled', class: 'trigger-schedule' };
+            } else if (event === 'workflow_dispatch') {
+                return { icon: '👤', text: `Manual (${actor})`, class: 'trigger-manual' };
+            } else if (event === 'push') {
+                return { icon: '📤', text: `Push (${actor})`, class: 'trigger-push' };
+            }
+            return { icon: '❓', text: event, class: 'trigger-other' };
+        }
+
         // Utility: Get status display text
         function getStatusText(status, conclusion) {
             if (status === 'completed') {
@@ -478,12 +556,29 @@
         }
 
         // Create run card element
-        function createRunCard(run) {
+        async function createRunCard(run) {
             const statusClass = getStatusClass(run.status, run.conclusion);
             const statusText = getStatusText(run.status, run.conclusion);
             const duration = run.updated_at && run.created_at 
                 ? new Date(run.updated_at) - new Date(run.created_at)
                 : null;
+
+            // Get trigger info
+            const triggerInfo = getTriggerInfo(run.event, run.triggering_actor?.login || 'github');
+
+            // Try to fetch job details for better status
+            const jobs = await fetchJobDetails(run.id);
+            const actualStatus = detectActualStatus(jobs);
+
+            // Status message (if any)
+            let statusMessage = '';
+            if (actualStatus.message) {
+                statusMessage = `
+                    <div style="margin-top: 10px; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; font-size: 0.85rem; color: #9ca3af;">
+                        ℹ️ ${actualStatus.message}
+                    </div>
+                `;
+            }
 
             return `
                 <div class="run-card" onclick="window.open('${run.html_url}', '_blank')">
@@ -494,21 +589,18 @@
                     <div class="run-info">
                         <div class="workflow-name">${run.name}</div>
                         <div class="run-details">
-                            <span class="run-detail">
+                            <span class="run-detail" title="Trigger type">
+                                ${triggerInfo.icon} ${triggerInfo.text}
+                            </span>
+                            <span class="run-detail" title="Duration">
                                 <svg fill="currentColor" viewBox="0 0 16 16">
                                     <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
                                     <path d="M7.5 3.5v5h4"/>
                                 </svg>
                                 ${formatDuration(duration)}
                             </span>
-                            <span class="run-detail">
-                                <svg fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
-                                    <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1v-1c0-1-1-4-6-4s-6 3-6 4v1a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12z"/>
-                                </svg>
-                                ${run.triggering_actor?.login || 'github'}
-                            </span>
                         </div>
+                        ${statusMessage}
                     </div>
                     <div class="run-meta">
                         <span class="run-time">${formatRelativeTime(run.created_at)}</span>
@@ -581,8 +673,9 @@
                     // Update stats
                     updateStats(runs);
 
-                    // Create runs grid
-                    const runsHTML = runs.map(run => createRunCard(run)).join('');
+                    // Create runs grid (await all async card creations)
+                    const runCards = await Promise.all(runs.map(run => createRunCard(run)));
+                    const runsHTML = runCards.join('');
                     contentDiv.innerHTML = `<div class="runs-grid">${runsHTML}</div>`;
 
                     // Update last updated time
