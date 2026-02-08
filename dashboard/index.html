@@ -177,7 +177,7 @@
         .run-card-container {
             perspective: 1000px;
             height: auto;
-            min-height: 250px;
+            min-height: 200px;
             margin-bottom: 20px;
             transition: margin-bottom 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
                         min-height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -191,8 +191,8 @@
         .run-card {
             position: relative;
             width: 100%;
-            height: 250px;
-            min-height: 250px;
+            height: 200px;
+            min-height: 200px;
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1),
                         height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             transform-style: preserve-3d;
@@ -218,8 +218,11 @@
         .card-front {
             z-index: 2;
             transition: border-color 0.2s;
-            height: 250px;
-            min-height: 250px;
+            height: 200px;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .run-card-container:hover .card-front {
@@ -231,7 +234,7 @@
             transform: rotateY(180deg);
             z-index: 1;
             height: auto !important;
-            min-height: 250px;
+            min-height: 200px;
             position: relative;
         }
         
@@ -348,7 +351,10 @@
         }
 
         .run-info {
-            margin-bottom: 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .workflow-name {
