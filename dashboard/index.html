@@ -178,13 +178,14 @@
             perspective: 1000px;
             height: auto;
             min-height: 250px;
-            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             margin-bottom: 20px;
+            transition: margin-bottom 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+                        min-height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .run-card-container.expanded {
-            min-height: auto;
-            /* Allow container to grow with content */
+            margin-bottom: 40px;
+            /* Extra space when card is flipped to back */
         }
 
         .run-card {
@@ -245,13 +246,15 @@
         @media (max-width: 768px) {
             .run-card-container {
                 margin-bottom: 15px;
-                transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+                margin-top: 0;
+                transition: margin-bottom 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                            margin-top 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             }
             
             .run-card-container.expanded {
-                margin-bottom: 30px;
+                margin-bottom: 50px;
                 margin-top: 10px;
-                transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+                /* More space on mobile for better readability */
             }
             
             .card-back {
@@ -1086,23 +1089,16 @@
 
             if (isFlipped) {
                 // Flip back to front - smooth collapse animation
+                
+                // Step 1: Remove CSS classes to trigger transition
                 card.classList.remove('flipped');
                 container.classList.remove('expanded');
                 
-                // Immediately reset heights to allow CSS transition to handle it
-                card.style.height = '';
-                container.style.minHeight = '';
-                
-                // Smooth scroll back up if needed (for mobile)
+                // Step 2: Wait for flip animation to complete, then clean up inline styles
                 setTimeout(() => {
-                    const rect = container.getBoundingClientRect();
-                    if (rect.top < 0) {
-                        container.scrollIntoView({ 
-                            behavior: 'smooth', 
-                            block: 'nearest'
-                        });
-                    }
-                }, 100);
+                    card.style.height = '';
+                    container.style.minHeight = '';
+                }, 650); // Match the transition duration
                 
                 return;
             }
