@@ -166,7 +166,6 @@
         .run-card {
             position: relative;
             width: 100%;
-            height: 100%;
             min-height: 250px;
             transition: transform 0.6s;
             transform-style: preserve-3d;
@@ -175,13 +174,12 @@
 
         .run-card.flipped {
             transform: rotateY(180deg);
-            min-height: auto;
+            height: auto;
         }
 
         .card-face {
             position: absolute;
             width: 100%;
-            min-height: 250px;
             backface-visibility: hidden;
             background: #2d2d2d;
             border-radius: 12px;
@@ -194,6 +192,7 @@
             z-index: 2;
             transition: border-color 0.2s;
             height: 250px;
+            min-height: 250px;
         }
 
         .run-card-container:hover .card-front {
@@ -204,19 +203,37 @@
         .card-back {
             transform: rotateY(180deg);
             z-index: 1;
-            overflow-y: auto;
-            height: auto;
+            height: auto !important;
             min-height: 250px;
+            position: relative;
+        }
+        
+        /* When flipped, adjust container height */
+        .run-card-container.expanded .run-card {
+            height: auto;
+        }
+        
+        .run-card-container.expanded .card-back {
+            position: relative;
         }
 
         /* Smooth height transition for mobile */
         @media (max-width: 768px) {
             .run-card-container {
-                margin-bottom: 10px;
+                margin-bottom: 15px;
             }
             
             .run-card-container.expanded {
-                margin-bottom: 20px;
+                margin-bottom: 30px;
+                margin-top: 10px;
+            }
+            
+            .card-back {
+                padding: 25px 20px;
+            }
+            
+            .back-content {
+                gap: 18px;
             }
         }
 
@@ -363,6 +380,8 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            width: 100%;
+            min-height: 250px;
         }
 
         .back-header {
@@ -979,16 +998,15 @@
             card.classList.add('flipped');
             container.classList.add('expanded');
             
-            // Smooth scroll into view on mobile for better UX
+            // Smooth scroll into view for better UX (especially mobile)
             setTimeout(() => {
-                if (window.innerWidth <= 768) {
-                    container.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'nearest',
-                        inline: 'nearest'
-                    });
-                }
-            }, 100);
+                // Scroll to show the full flipped card
+                container.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start',
+                    inline: 'nearest'
+                });
+            }, 650); // Wait for flip animation to complete
 
             // Fetch and render back side
             const backEl = document.getElementById(`${cardId}-back`);
