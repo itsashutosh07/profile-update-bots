@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Update Bot - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px 0;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #9ca3af;
+            font-size: 1.1rem;
+        }
+
+        /* Stats Section */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: #2d2d2d;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border: 1px solid #3a3a3a;
+        }
+
+        .stat-label {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .success-rate {
+            color: #10b981;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.4);
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.5);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .last-updated {
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .spinner {
+            border: 4px solid #3a3a3a;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Runs Grid */
+        .runs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .run-card {
+            background: #2d2d2d;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #3a3a3a;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .run-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            border-color: #667eea;
+        }
+
+        .run-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .run-number {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-success::before {
+            background: #10b981;
+        }
+
+        .status-failure {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-failure::before {
+            background: #ef4444;
+        }
+
+        .status-in_progress {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-in_progress::before {
+            background: #3b82f6;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-skipped,
+        .status-cancelled {
+            background: rgba(107, 114, 128, 0.15);
+            color: #6b7280;
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+
+        .status-skipped::before,
+        .status-cancelled::before {
+            background: #6b7280;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .run-info {
+            margin-bottom: 12px;
+        }
+
+        .workflow-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 8px;
+        }
+
+        .run-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+
+        .run-detail {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .run-detail svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .run-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid #3a3a3a;
+            margin-top: 12px;
+        }
+
+        .run-time {
+            color: #9ca3af;
+            font-size: 0.85rem;
+        }
+
+        .view-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s;
+        }
+
+        .view-link:hover {
+            color: #8b9efe;
+        }
+
+        /* Error State */
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            color: #ef4444;
+        }
+
+        .error h3 {
+            margin-bottom: 10px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .runs-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                justify-content: center;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .runs-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px 0;
+            color: #6b7280;
+            font-size: 0.9rem;
+            border-top: 1px solid #3a3a3a;
+            margin-top: 40px;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🤖 Profile Update Bot</h1>
+            <p>GitHub Actions Workflow Monitor</p>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Runs</div>
+                <div class="stat-value" id="totalRuns">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-value success-rate" id="successRate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Last Run</div>
+                <div class="stat-value" id="lastRun">-</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="refresh-btn" id="refreshBtn" onclick="loadRuns()">
+                🔄 Refresh
+            </button>
+            <div class="last-updated">
+                Last updated: <span id="lastUpdated">Never</span>
+            </div>
+        </div>
+
+        <!-- Loading/Content Area -->
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading workflow runs...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Powered by <a href="https://github.com" target="_blank">GitHub Actions</a> | 
+            <a href="https://github.com/itsashutosh07/profile-update-bots" target="_blank">View Repository</a>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Update these values
+        const GITHUB_OWNER = 'itsashutosh07';
+        const GITHUB_REPO = 'profile-update-bots';
+        const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=30`;
+
+        // Utility: Format relative time
+        function formatRelativeTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+            if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+            if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+            return 'Just now';
+        }
+
+        // Utility: Format duration
+        function formatDuration(ms) {
+            if (!ms) return 'N/A';
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            if (minutes > 0) {
+                return `${minutes}m ${remainingSeconds}s`;
+            }
+            return `${seconds}s`;
+        }
+
+        // Utility: Get status display text
+        function getStatusText(status, conclusion) {
+            if (status === 'completed') {
+                return conclusion || 'completed';
+            }
+            return status;
+        }
+
+        // Utility: Get status class
+        function getStatusClass(status, conclusion) {
+            if (status === 'completed') {
+                if (conclusion === 'success') return 'status-success';
+                if (conclusion === 'failure') return 'status-failure';
+                if (conclusion === 'cancelled') return 'status-cancelled';
+                if (conclusion === 'skipped') return 'status-skipped';
+            }
+            if (status === 'in_progress') return 'status-in_progress';
+            return 'status-skipped';
+        }
+
+        // Create run card element
+        function createRunCard(run) {
+            const statusClass = getStatusClass(run.status, run.conclusion);
+            const statusText = getStatusText(run.status, run.conclusion);
+            const duration = run.updated_at && run.created_at 
+                ? new Date(run.updated_at) - new Date(run.created_at)
+                : null;
+
+            return `
+                <div class="run-card" onclick="window.open('${run.html_url}', '_blank')">
+                    <div class="run-header">
+                        <span class="run-number">#${run.run_number}</span>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="run-info">
+                        <div class="workflow-name">${run.name}</div>
+                        <div class="run-details">
+                            <span class="run-detail">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
+                                    <path d="M7.5 3.5v5h4"/>
+                                </svg>
+                                ${formatDuration(duration)}
+                            </span>
+                            <span class="run-detail">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+                                    <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1v-1c0-1-1-4-6-4s-6 3-6 4v1a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12z"/>
+                                </svg>
+                                ${run.triggering_actor?.login || 'github'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="run-meta">
+                        <span class="run-time">${formatRelativeTime(run.created_at)}</span>
+                        <a href="${run.html_url}" class="view-link" onclick="event.stopPropagation()">
+                            View Logs →
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Calculate statistics
+        function calculateStats(runs) {
+            const total = runs.length;
+            const successful = runs.filter(r => r.conclusion === 'success').length;
+            const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
+            
+            const lastRun = runs[0];
+            let lastStatus = 'N/A';
+            if (lastRun) {
+                const status = getStatusText(lastRun.status, lastRun.conclusion);
+                lastStatus = status.charAt(0).toUpperCase() + status.slice(1);
+            }
+
+            return { total, successRate, lastStatus };
+        }
+
+        // Update stats display
+        function updateStats(runs) {
+            const stats = calculateStats(runs);
+            document.getElementById('totalRuns').textContent = stats.total;
+            document.getElementById('successRate').textContent = `${stats.successRate}%`;
+            document.getElementById('lastRun').textContent = stats.lastStatus;
+        }
+
+        // Fetch and display runs
+        async function loadRuns() {
+            const contentDiv = document.getElementById('content');
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            // Disable refresh button
+            refreshBtn.disabled = true;
+            
+            // Show loading
+            contentDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading workflow runs...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const runs = data.workflow_runs || [];
+
+                if (runs.length === 0) {
+                    contentDiv.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No workflow runs found</h3>
+                            <p>Workflow runs will appear here once they start executing.</p>
+                        </div>
+                    `;
+                } else {
+                    // Update stats
+                    updateStats(runs);
+
+                    // Create runs grid
+                    const runsHTML = runs.map(run => createRunCard(run)).join('');
+                    contentDiv.innerHTML = `<div class="runs-grid">${runsHTML}</div>`;
+
+                    // Update last updated time
+                    document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+                }
+            } catch (error) {
+                console.error('Error loading runs:', error);
+                contentDiv.innerHTML = `
+                    <div class="error">
+                        <h3>Failed to Load Runs</h3>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 15px;">
+                            <small>Make sure the repository is public or check the console for more details.</small>
+                        </p>
+                    </div>
+                `;
+            } finally {
+                // Re-enable refresh button
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Load runs on page load
+        document.addEventListener('DOMContentLoaded', loadRuns);
+    </script>
+</body>
+</html>
+

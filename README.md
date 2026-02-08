@@ -5,12 +5,14 @@
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue)](https://github.com/features/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Live Dashboard](https://img.shields.io/badge/📊_Live-Dashboard-667eea?style=for-the-badge)](https://itsashutosh07.github.io/profile-update-bots/)
 
 ---
 
 ## 📋 Table of Contents
 
 - [Overview](#overview)
+- [Dashboard](#dashboard)
 - [Currently Supported Platforms](#currently-supported-platforms)
 - [Key Features](#key-features)
 - [How It Works](#how-it-works)
@@ -32,6 +34,29 @@ Profile Update Bot is an intelligent automation solution that keeps your job por
 - **Increased Visibility**: Regular updates keep your profile appearing in "recently updated" sections
 - **Time-Saving**: Set it once, forget about it - runs automatically
 - **Professional Presence**: Maintains an active, engaged profile without manual effort
+
+---
+
+## 📊 Dashboard
+
+**Monitor your automation in real-time!**
+
+A beautiful, minimal dashboard to track workflow runs, success rates, and execution history.
+
+[![View Live Dashboard](https://img.shields.io/badge/📊_View-Live_Dashboard-667eea?style=for-the-badge)](https://itsashutosh07.github.io/profile-update-bots/)
+
+### Features
+- ✅ Real-time workflow status
+- 📈 Success rate statistics
+- 🕐 Run history (last 30 runs)
+- 📱 Mobile-friendly design
+- 🌙 Dark mode UI
+- 🔄 Manual refresh
+- 🔗 Direct links to GitHub logs
+
+**Tech**: Pure HTML/CSS/JS • No backend • GitHub API • GitHub Pages
+
+📚 **Setup Guide**: See [`dashboard/SETUP.md`](dashboard/SETUP.md) for deployment instructions
 
 ---
 

@@ -5,6 +5,7 @@ Automatically updates your Naukri.com profile every 6 hours using **GitHub Actio
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)]()
 [![Platform](https://img.shields.io/badge/Platform-Naukri.com-blue)]()
 [![Automation](https://img.shields.io/badge/Automation-100%25-success)]()
+[![Dashboard](https://img.shields.io/badge/📊-View_Dashboard-667eea)](https://itsashutosh07.github.io/profile-update-bots/)
 
 ---
 
@@ -29,10 +30,13 @@ Automatically updates your Naukri.com profile every 6 hours using **GitHub Actio
 - ✅ **No data collection**
 
 ### 📸 Monitoring & Debugging
+- ✅ **Live Dashboard** - Real-time run status and history
 - ✅ **Screenshots** at every step
 - ✅ **Detailed logs** with timestamps
 - ✅ **Error tracking** with full stack traces
 - ✅ **Artifact storage** for 7 days
+
+**🎯 [View Live Dashboard](https://itsashutosh07.github.io/profile-update-bots/)** - Monitor success rates, run history, and execution status
 
 ---
 
