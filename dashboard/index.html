@@ -882,19 +882,20 @@
                         };
                     }
                 } else if (statusCheckStep.conclusion === 'failure') {
-                const errorDetails = failedSteps.map(s => `Step "${s.name}" failed`).join(', ');
-                return {
-                    actualStatus: 'Failed',
-                    statusIcon: '❌',
-                    statusClass: 'error-box',
-                    description: 'The profile update script encountered an error and failed to complete.',
-                    errorInfo: errorDetails || 'Check the complete logs for detailed error information'
-                };
+                    const errorDetails = failedSteps.map(s => `Step "${s.name}" failed`).join(', ');
+                    return {
+                        actualStatus: 'Failed',
+                        statusIcon: '❌',
+                        statusClass: 'error-box',
+                        description: 'The profile update script encountered an error and failed to complete.',
+                        errorInfo: errorDetails || 'Check the complete logs for detailed error information'
+                    };
+                }
             }
             
             // OLD RUNS: Don't have "Check run status" step (before we added it)
             // Can't distinguish between success and rate limiting reliably
-            else if (updateStep) {
+            if (updateStep) {
                 if (updateStep.conclusion === 'success') {
                     return {
                         actualStatus: 'Completed',
