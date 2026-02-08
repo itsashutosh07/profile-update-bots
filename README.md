@@ -46,13 +46,14 @@ A beautiful, minimal dashboard to track workflow runs, success rates, and execut
 [![View Live Dashboard](https://img.shields.io/badge/📊_View-Live_Dashboard-667eea?style=for-the-badge)](https://itsashutosh07.github.io/profile-update-bots/)
 
 ### Features
-- ✅ Real-time workflow status
+- ✅ Real-time workflow status with detailed error messages
 - 📈 Success rate statistics
-- 🕐 Run history (last 30 runs)
-- 📱 Mobile-friendly design
-- 🌙 Dark mode UI
-- 🔄 Manual refresh
-- 🔗 Direct links to GitHub logs
+- 🕐 Run history with flip-card UI
+- 📱 Mobile-friendly responsive design
+- 🌙 Dark mode with Naukri branding
+- 🔄 Manual refresh with API rate limit tracking
+- 🔗 Direct links to specific job logs
+- 🎨 Satoshi font • Professional UI
 
 **Tech**: Pure HTML/CSS/JS • No backend • GitHub API • GitHub Pages
 
@@ -69,7 +70,7 @@ Full automation support with:
 - ✅ OTP handling via Gmail API
 - ✅ Profile headline updates
 - ✅ Rate limit detection and handling
-- ✅ Scheduled runs (4 times per day)
+- ✅ Scheduled runs (once daily at 6:00 AM IST)
 - ✅ Screenshot logging for debugging
 - ✅ Error handling and recovery
 
@@ -113,7 +114,7 @@ Full automation support with:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     GitHub Actions Workflow                  │
-│                    (Runs Every 6 Hours)                      │
+│                (Runs Daily at 6:00 AM IST)                   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -188,9 +189,10 @@ Full automation support with:
 
 ### Run Schedule
 
-- **Frequency**: Every 6 hours (4 times per day)
-- **Times**: 12am, 6am, 12pm, 6pm UTC
+- **Frequency**: Once daily
+- **Time**: 6:00 AM IST (12:30 AM UTC)
 - **Manual trigger**: Available anytime via Actions tab
+- **Why once daily?**: Prevents rate limiting and account restrictions
 
 ---
 
@@ -336,7 +338,7 @@ python3 update.py
 - **Active Users**: Growing community
 - **Success Rate**: ~95% (with proper setup)
 - **Average Runtime**: 1-2 minutes per execution
-- **GitHub Actions Minutes Used**: ~50-60 min/month (out of 2000 free)
+- **GitHub Actions Minutes Used**: ~30-40 min/month (out of 2000 free)
 
 ### Why GitHub Actions?
 

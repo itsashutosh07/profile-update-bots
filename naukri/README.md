@@ -1,6 +1,6 @@
 # 🤖 Naukri.com Profile Update Bot
 
-Automatically updates your Naukri.com profile every 6 hours using **GitHub Actions** - completely FREE and NO credit card required!
+Automatically updates your Naukri.com profile daily at 6:00 AM IST using **GitHub Actions** - completely FREE and NO credit card required!
 
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)]()
 [![Platform](https://img.shields.io/badge/Platform-Naukri.com-blue)]()
@@ -12,7 +12,7 @@ Automatically updates your Naukri.com profile every 6 hours using **GitHub Actio
 ## ✨ Features
 
 ### 🤖 Full Automation
-- ✅ **Automatic updates** every 6 hours (4 times daily)
+- ✅ **Automatic updates** once daily at 6:00 AM IST
 - ✅ **OTP handling** via Gmail API (no manual intervention!)
 - ✅ **Anti-bot detection** measures built-in
 - ✅ **Rate limit handling** with graceful exits
@@ -20,7 +20,7 @@ Automatically updates your Naukri.com profile every 6 hours using **GitHub Actio
 ### 💰 Free Forever
 - ✅ **No credit card** required
 - ✅ **GitHub Actions** (2000 free minutes/month)
-- ✅ Uses only ~50-60 minutes/month
+- ✅ Uses only ~30-40 minutes/month
 - ✅ **Zero hosting costs**
 
 ### 🔒 Secure & Private
@@ -106,7 +106,7 @@ naukri/
 
 ```
 ┌─────────────────────────────────┐
-│  GitHub Actions (Every 6 Hours) │
+│  GitHub Actions (Daily 6 AM IST)│
 └─────────────────────────────────┘
                 │
                 ▼
@@ -150,11 +150,14 @@ naukri/
 
 ### Schedule
 
-**Runs 4 times per day:**
-- 00:00 UTC (05:30 AM IST)
-- 06:00 UTC (11:30 AM IST)
-- 12:00 UTC (05:30 PM IST)
-- 18:00 UTC (11:30 PM IST)
+**Runs once daily:**
+- 00:30 UTC (06:00 AM IST)
+
+**Why once daily?**
+- Prevents OTP rate limiting
+- Avoids account restrictions
+- Still keeps profile active
+- Manual trigger available anytime
 
 ---
 
@@ -184,15 +187,15 @@ naukri/
 
 | Resource | Free Tier | Our Usage | Remaining |
 |----------|-----------|-----------|-----------|
-| **GitHub Actions** | 2000 min/month | ~50-60 min/month | ~1940 min |
-| **Storage** | 500 MB | ~100 MB | ~400 MB |
+| **GitHub Actions** | 2000 min/month | ~30-40 min/month | ~1960 min |
+| **Storage** | 500 MB | ~50 MB | ~450 MB |
 | **Gmail API** | Free | Free forever | ∞ |
 | **Total Cost** | $0 | $0 | **FREE** |
 
 **Why This Works:**
 - Each run: ~1.5 minutes
-- 4 runs/day × 30 days = 120 runs
-- 120 runs × 1.5 min = 180 minutes/month
+- 1 run/day × 30 days = 30 runs
+- 30 runs × 1.5 min = 45 minutes/month
 - **Well within free tier!** 🎉
 
 ---
