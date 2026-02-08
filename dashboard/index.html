@@ -926,14 +926,12 @@
             
             // Find failed steps
             const failedSteps = updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
-
-            // Check for rate limit indicators in step names/conclusions
-            // Look for rate limit messages in logs (works for all runs, old and new)
-            const hasRateLimitInLogs = updateJob.steps?.some(step => {
-                // The "Check run status" step logs will contain "Status: RATE_LIMITED" or "Rate limited"
-                // The "Run update script" step logs will contain "[OTP] 🚫 RATE LIMITED!"
-                return step.name === 'Check run status' || step.name === 'Run update script';
-            });
+            
+            // Debug logging
+            console.log(`[DEBUG] Parsing Run ID: ${updateJob.run_id}`);
+            console.log(`[DEBUG] Update Step: ${updateStep?.name} - ${updateStep?.conclusion}`);
+            console.log(`[DEBUG] Status Check Step: ${statusCheckStep?.name} - ${statusCheckStep?.conclusion}`);
+            console.log(`[DEBUG] Rate Limit Marker: ${rateLimitMarker?.name} - ${rateLimitMarker?.conclusion}`);
 
             // NEW RUNS: Check for rate limit marker step (most reliable for future runs)
             if (rateLimitMarker) {
