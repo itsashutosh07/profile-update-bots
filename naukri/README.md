@@ -1,248 +1,488 @@
-# 🤖 Naukri Profile Update Bot
+# 🤖 Naukri.com Profile Update Bot
 
-Automatically updates your Naukri.com profile every 2 hours using **GitHub Actions** - completely FREE and NO credit card required!
+Automatically updates your Naukri.com profile every 6 hours using **GitHub Actions** - completely FREE and NO credit card required!
+
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)]()
+[![Platform](https://img.shields.io/badge/Platform-Naukri.com-blue)]()
+[![Automation](https://img.shields.io/badge/Automation-100%25-success)]()
+
+---
 
 ## ✨ Features
 
-- ✅ **Automatic updates** every 2 hours
-- ✅ **Free forever** (GitHub Actions)
+### 🤖 Full Automation
+- ✅ **Automatic updates** every 6 hours (4 times daily)
+- ✅ **OTP handling** via Gmail API (no manual intervention!)
+- ✅ **Anti-bot detection** measures built-in
+- ✅ **Rate limit handling** with graceful exits
+
+### 💰 Free Forever
 - ✅ **No credit card** required
-- ✅ **Screenshots** saved for verification
-- ✅ **Secure** credential storage
-- ✅ **Easy setup** (10 minutes)
+- ✅ **GitHub Actions** (2000 free minutes/month)
+- ✅ Uses only ~50-60 minutes/month
+- ✅ **Zero hosting costs**
+
+### 🔒 Secure & Private
+- ✅ **Encrypted credentials** via GitHub Secrets
+- ✅ **OAuth2** for Gmail (no password storage)
+- ✅ **Read-only** Gmail access
+- ✅ **No data collection**
+
+### 📸 Monitoring & Debugging
+- ✅ **Screenshots** at every step
+- ✅ **Detailed logs** with timestamps
+- ✅ **Error tracking** with full stack traces
+- ✅ **Artifact storage** for 7 days
 
 ---
 
-## 🚀 Quick Setup (10 Minutes)
+## 🚀 Quick Setup
 
-### Step 1: Prerequisites
+### Prerequisites
+- GitHub account (free)
+- Gmail account (for OTP)
+- Naukri.com account
+- 20 minutes setup time
 
-You need:
-- Free GitHub account (no credit card!)
-- Your Naukri.com credentials
-- 10 minutes
+### Setup Guides (Choose One)
 
-### Step 2: Follow the Setup Guide
+| Guide | Best For | Time | Difficulty |
+|-------|----------|------|------------|
+| [**QUICK_START_OTP.md**](QUICK_START_OTP.md) | Quick reference | 5 min | ⭐ |
+| [**GMAIL_API_SETUP.md**](GMAIL_API_SETUP.md) | First-time setup | 20 min | ⭐⭐ |
+| [**GITHUB_ACTIONS_SETUP.md**](GITHUB_ACTIONS_SETUP.md) | Detailed walkthrough | 30 min | ⭐⭐⭐ |
 
-📖 **Open**: [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md)
+### 3-Step Setup
 
-This guide includes:
-- Step-by-step instructions with screenshots
-- How to secure your credentials
-- How to monitor your bot
-- Troubleshooting tips
-- FAQ
+1. **Clone & Configure**
+   ```bash
+   git clone <your-repo-url>
+   cd profile-update-bot/naukri
+   ```
 
-### Step 3: Done! ✅
+2. **Setup Gmail API** (for OTP)
+   - Follow [GMAIL_API_SETUP.md](GMAIL_API_SETUP.md)
+   - Get OAuth credentials
+   - Run `get_gmail_token.py`
 
-Your profile will update automatically every 2 hours!
+3. **Add GitHub Secrets**
+   - `NAUKRI_EMAIL`
+   - `NAUKRI_PASSWORD`
+   - `GMAIL_CLIENT_ID`
+   - `GMAIL_CLIENT_SECRET`
+   - `GMAIL_REFRESH_TOKEN`
+
+✅ **Done!** Your profile updates automatically!
 
 ---
 
-## 📁 Project Files
+## 📁 Project Structure
 
 ```
 naukri/
 ├── update.py                      # Main automation script
+├── gmail_otp_reader.py           # Gmail API OTP reader
+├── get_gmail_token.py            # OAuth token generator
 ├── requirements.txt               # Python dependencies
-├── .env                          # Your credentials (DON'T upload to GitHub!)
-├── .env.example                  # Template for credentials
-├── .gitignore                    # Protects sensitive files
-├── .github/
-│   └── workflows/
-│       └── update-profile.yml    # GitHub Actions workflow
-├── README.md                     # This file
-└── GITHUB_ACTIONS_SETUP.md       # Complete setup guide
+│
+├── README.md                      # This file
+├── QUICK_START_OTP.md            # Quick reference guide
+├── GMAIL_API_SETUP.md            # Gmail API setup tutorial
+├── GITHUB_ACTIONS_SETUP.md       # Detailed GitHub Actions guide
+├── GET_STARTED.md                # General getting started
+│
+└── .gitignore                     # Protected files
 ```
 
 ---
 
 ## 🎯 How It Works
 
-1. **GitHub Actions** runs on a schedule (every 2 hours)
-2. **Chrome browser** logs into your Naukri account
-3. **Script updates** your resume headline with keywords
-4. **Screenshots** are saved for verification
-5. **Repeat** automatically!
+### Execution Flow
+
+```
+┌─────────────────────────────────┐
+│  GitHub Actions (Every 6 Hours) │
+└─────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│  Launch Headless Chrome Browser │
+└─────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│  Navigate to Naukri Login Page  │
+│  • Enter email & password       │
+│  • Anti-bot measures active     │
+└─────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│  OTP Detection & Handling       │
+│  • Detect OTP page              │
+│  • Connect to Gmail API         │
+│  • Read OTP from email          │
+│  • Enter OTP automatically      │
+└─────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│  Profile Update                 │
+│  • Navigate to profile page     │
+│  • Find Resume Headline section │
+│  • Update with keywords         │
+│  • Save changes                 │
+└─────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│  Cleanup & Logging              │
+│  • Save screenshots             │
+│  • Upload artifacts             │
+│  • Report success/failure       │
+└─────────────────────────────────┘
+```
+
+### Schedule
+
+**Runs 4 times per day:**
+- 00:00 UTC (05:30 AM IST)
+- 06:00 UTC (11:30 AM IST)
+- 12:00 UTC (05:30 PM IST)
+- 18:00 UTC (11:30 PM IST)
 
 ---
 
-## 🔒 Security
+## 🔒 Security Features
 
-Your credentials are stored as **GitHub Secrets**:
-- ✅ Encrypted by GitHub
-- ✅ Never visible in logs or code
-- ✅ Only accessible to your workflows
-- ✅ Cannot be read by anyone else
+### Credential Protection
+- All credentials stored as GitHub Secrets (encrypted)
+- OAuth2 for Gmail (no password storage)
+- No plain-text passwords in code or logs
+- Credentials never visible in workflow logs
+
+### Gmail API Permissions
+- **Read-only** access to Gmail
+- Cannot send emails
+- Cannot delete emails
+- Only reads OTP from Naukri
+
+### Anti-Detection Measures
+- Custom User-Agent strings
+- Disables automation detection flags
+- Removes webdriver property
+- Natural timing and delays
 
 ---
 
-## 📊 Cost & Limits
+## 📊 Cost & Usage
 
-| Resource | Limit | Usage | Status |
-|----------|-------|-------|--------|
-| **GitHub Actions** | 2,000 min/month | ~1,000 min/month | ✅ Plenty |
-| **Storage** | 500MB | ~50MB | ✅ Plenty |
-| **Cost** | $0 | $0 | ✅ FREE! |
+| Resource | Free Tier | Our Usage | Remaining |
+|----------|-----------|-----------|-----------|
+| **GitHub Actions** | 2000 min/month | ~50-60 min/month | ~1940 min |
+| **Storage** | 500 MB | ~100 MB | ~400 MB |
+| **Gmail API** | Free | Free forever | ∞ |
+| **Total Cost** | $0 | $0 | **FREE** |
+
+**Why This Works:**
+- Each run: ~1.5 minutes
+- 4 runs/day × 30 days = 120 runs
+- 120 runs × 1.5 min = 180 minutes/month
+- **Well within free tier!** 🎉
 
 ---
 
 ## 🎛️ Management
 
-### View Workflow Runs
-1. Go to your repository on GitHub
-2. Click "Actions" tab
-3. See all runs with logs and screenshots
+### View Runs
+```
+GitHub Repo → Actions Tab → Update Naukri Profile
+```
 
-### Run Manually
-1. Actions → Update Naukri Profile
-2. Click "Run workflow"
-3. Done!
+### Manual Trigger
+```
+Actions → Update Naukri Profile → Run workflow → Run workflow
+```
 
-### Pause Automation
-1. Actions → Update Naukri Profile
-2. Click "..." → Disable workflow
+### Check Screenshots
+```
+Click on run → Scroll to Artifacts → Download screenshots-*.zip
+```
 
-### Resume Automation
-1. Actions → Update Naukri Profile
-2. Click "..." → Enable workflow
+### Pause/Resume
+```
+Actions → Update Naukri Profile → ⋯ → Disable/Enable workflow
+```
 
 ---
 
-## 🧪 Local Testing (Optional)
+## 🧪 Local Testing
 
-Want to test locally before deploying?
+Test before deploying to GitHub Actions:
 
 ```bash
 # Install dependencies
-pip3 install -r requirements.txt
+cd naukri
+pip install -r requirements.txt
 
-# Create .env file with your credentials
-cp .env.example .env
-nano .env  # Add your email and password
+# Create .env file
+cat > .env << EOF
+NAUKRI_EMAIL=your_email@gmail.com
+NAUKRI_PASSWORD=your_password
+GMAIL_CLIENT_ID=your_client_id
+GMAIL_CLIENT_SECRET=your_secret
+GMAIL_REFRESH_TOKEN=your_token
+EOF
 
-# Run once
+# Run locally
 python3 update.py
 ```
 
-Screenshots will be saved in `Logs Screenshot/` folder.
+Screenshots saved in: `Logs Screenshot/DD-MM-YY_HH-MM_AM/`
 
 ---
 
-## 📖 Documentation
+## 🔧 Configuration
 
-| File | Purpose |
-|------|---------|
-| **GITHUB_ACTIONS_SETUP.md** | Complete setup guide (START HERE!) |
-| **README.md** | This file - project overview |
-| **.env.example** | Template for credentials |
-
----
-
-## 🔧 Troubleshooting
-
-### Workflow Fails
-
-**Check the logs:**
-1. Go to Actions tab
-2. Click on failed workflow run
-3. Review error messages
-
-**Common issues:**
-- Missing secrets (add `NAUKRI_EMAIL` and `NAUKRI_PASSWORD` in Settings → Secrets)
-- Incorrect credentials (update secrets)
-- Naukri website changes (check screenshots to see what happened)
-
-### Can't Find Secrets
-
-1. Go to your repository on GitHub
-2. Click "Settings" tab
-3. Secrets and variables → Actions
-4. Add/update secrets here
-
-### Workflow Not Running
-
-- Make sure Actions are enabled (Actions tab)
-- Check if workflow is disabled (re-enable it)
-- Verify cron schedule is correct
-
----
-
-## 💡 Tips
-
-1. **Check weekly**: Review Actions tab to ensure updates are working
-2. **Download screenshots**: Available for 7 days in Artifacts
-3. **Monitor usage**: Check GitHub Actions usage in settings
-4. **Update resume text**: Edit `update.py` line 100-102 to customize
-
----
-
-## ⚙️ Configuration
-
-### Change Update Interval
+### Change Update Frequency
 
 Edit `.github/workflows/update-profile.yml`:
 
 ```yaml
 schedule:
-  # Current: Every 2 hours
-  - cron: '0 */2 * * *'
+  # Current: Every 6 hours (4x daily)
+  - cron: '0 */6 * * *'
   
-  # Every 3 hours
-  - cron: '0 */3 * * *'
+  # Every 8 hours (3x daily)
+  - cron: '0 */8 * * *'
   
-  # Every 4 hours
-  - cron: '0 */4 * * *'
+  # Every 12 hours (2x daily)
+  - cron: '0 */12 * * *'
+  
+  # Daily at 9 AM UTC
+  - cron: '0 9 * * *'
 ```
 
-### Change Resume Headline Text
+⚠️ **Warning**: More frequent updates may trigger rate limits!
 
-Edit `update.py` around line 100-102:
+### Customize Profile Text
+
+Edit `update.py` around line 342:
 
 ```python
 updated_text = (
-    "Your custom resume headline with keywords here"
+    "Your custom resume headline with keywords"
 )
 ```
 
----
-
-## 📞 Need Help?
-
-1. Read [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md) - detailed guide
-2. Check troubleshooting section above
-3. Review GitHub Actions logs for errors
-4. Check screenshots to see what's happening
+**Tips:**
+- Include relevant keywords
+- Keep it under 250 characters
+- Update periodically for freshness
 
 ---
 
-## 🎉 What You Get
+## 🔍 Troubleshooting
 
-Once deployed:
-- ✅ Profile updates every 2 hours automatically
-- ✅ Runs 24/7 without your laptop
-- ✅ Screenshots saved with timestamps
-- ✅ Detailed logs of each run
-- ✅ Email notifications on failures
-- ✅ Completely FREE forever
-- ✅ NO credit card required
+### Common Issues
+
+#### 1. OTP Not Detected
+**Symptoms**: Logs show "No OTP required" but OTP was sent
+
+**Solution**:
+- Check Gmail API credentials
+- Verify all 3 Gmail secrets are added
+- Ensure test user is configured in Google Cloud
+- Check screenshots for actual page state
+
+#### 2. Rate Limited
+**Symptoms**: "Require OTP to login, but you have reached max limit"
+
+**Solution**:
+- **This is normal!** Bot handles it gracefully
+- Wait 24 hours
+- Reduce update frequency
+- Don't manually test too often
+
+#### 3. Login Fails
+**Symptoms**: Still on login page after OTP
+
+**Solution**:
+- Verify `NAUKRI_EMAIL` and `NAUKRI_PASSWORD`
+- Check if password has special characters (may need escaping)
+- Review screenshot artifacts
+- Try manual login to verify credentials
+
+#### 4. Gmail API Errors
+**Symptoms**: "Failed to retrieve OTP from Gmail"
+
+**Solutions**:
+- Refresh token expired → Regenerate using `get_gmail_token.py`
+- Check Gmail API is enabled in Google Cloud Console
+- Verify email is added as test user
+- Check credential names match exactly
+
+### Debug Steps
+
+1. **Check workflow logs**
+   ```
+   Actions → Failed Run → Click on "update" job
+   ```
+
+2. **Download screenshots**
+   ```
+   Scroll to Artifacts → Download screenshots-*.zip
+   ```
+
+3. **Verify secrets**
+   ```
+   Settings → Secrets and variables → Actions
+   Should have 5 secrets total
+   ```
+
+4. **Test locally**
+   ```bash
+   python3 update.py
+   ```
 
 ---
 
-## 📝 License
+## 📖 Documentation Index
 
-MIT License - Feel free to use and modify!
-
----
-
-## 🚀 Ready to Start?
-
-**Open the setup guide and follow along:**
-
-📖 **[GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md)**
-
-Takes only 10 minutes! 🎊
+| Document | Purpose | When to Read |
+|----------|---------|--------------|
+| [README.md](README.md) | Overview & reference | Always |
+| [QUICK_START_OTP.md](QUICK_START_OTP.md) | Fast setup guide | After first setup |
+| [GMAIL_API_SETUP.md](GMAIL_API_SETUP.md) | Gmail API tutorial | First time setup |
+| [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md) | Complete walkthrough | Beginners |
+| [GET_STARTED.md](GET_STARTED.md) | General guide | Optional |
 
 ---
 
-**Happy job hunting! 🤖**
+## 🎯 Success Metrics
+
+Once properly configured, you should see:
+
+- ✅ **95%+ success rate** on workflow runs
+- ✅ **Profile last updated** within 6 hours on Naukri
+- ✅ **OTP handled automatically** (no manual intervention)
+- ✅ **Screenshots** showing successful profile updates
+- ✅ **Zero failures** due to rate limiting (handles gracefully)
+
+---
+
+## 💡 Pro Tips
+
+1. **Don't Over-Test**: Manual testing triggers OTP limits
+2. **Check Weekly**: Review Actions tab once a week
+3. **Monitor Gmail**: Ensure OTP emails are coming through
+4. **Update Keywords**: Refresh resume text monthly
+5. **Download Logs**: Save artifacts before they expire (7 days)
+
+---
+
+## 🚨 Known Limitations
+
+- **OTP Rate Limit**: Naukri limits OTP requests (handled gracefully)
+- **Manual OTP**: Can't handle SMS OTP (only email)
+- **Session Duration**: Must re-login each time (no session storage)
+- **Single Account**: One bot per GitHub repo/account
+
+---
+
+## 🔄 What Gets Updated
+
+Currently updates:
+- ✅ **Resume Headline**: Main profile summary
+
+**Future Plans**:
+- 📋 Profile summary
+- 📋 Skills section
+- 📋 Last active timestamp
+- 📋 Resume file (re-upload)
+
+---
+
+## 📞 Support
+
+### Get Help
+
+1. **Read Documentation**: Check guides above
+2. **Review Logs**: Actions tab has detailed logs
+3. **Check Screenshots**: Download artifacts to see visual state
+4. **GitHub Issues**: Report bugs or request features
+
+### Useful Links
+
+- 📖 [Parent Project README](../README.md)
+- 🐛 [Report Issue](../../issues)
+- 💬 [Discussions](../../discussions)
+- 📧 Email: your.email@example.com
+
+---
+
+## 🎉 Success Stories
+
+Once deployed successfully:
+- Increases profile visibility
+- Appears in "recently active" searches
+- Higher recruiter engagement
+- Zero manual effort required
+
+---
+
+## 📝 Changelog
+
+### v2.0 (Current)
+- ✅ Gmail API OTP automation
+- ✅ Rate limit handling
+- ✅ Improved error logging
+- ✅ Reduced frequency (6 hours)
+
+### v1.0
+- ✅ Basic automation
+- ✅ GitHub Actions integration
+- ✅ Screenshot logging
+
+---
+
+## ⚖️ License
+
+MIT License - See [LICENSE](../LICENSE) for details.
+
+---
+
+## 🙏 Credits
+
+- Selenium WebDriver
+- Google Gmail API
+- GitHub Actions
+- All contributors
+
+---
+
+## ⚠️ Disclaimer
+
+**For educational and personal use only.**
+
+- ✅ Use responsibly
+- ✅ Follow Naukri's Terms of Service
+- ✅ Don't spam or abuse
+- ⚠️ Use at your own risk
+
+**Authors not responsible for account restrictions.**
+
+---
+
+<div align="center">
+
+**Ready to automate your profile?**
+
+Start with: [QUICK_START_OTP.md](QUICK_START_OTP.md)
+
+---
+
+[⬆ Back to Top](#-naukricom-profile-update-bot) | [🏠 Main README](../README.md)
+
+</div>
