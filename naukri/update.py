@@ -204,11 +204,15 @@ try:
                 print(f"[DEBUG] Error with selector {selector}: {str(e)}")
                 continue
         
-        # If we found OTP text but no inputs, wait a bit more
+        # If we found OTP text but no inputs, wait a bit more for page to load
         if has_otp_text and not otp_present:
-            print("[OTP] OTP text found but inputs not detected yet, waiting...")
-            time.sleep(3)
-            # Try again
+            print("[OTP] OTP text found but inputs not detected yet, waiting for page to load...")
+            time.sleep(5)  # Increased wait time
+            
+            # Take a screenshot to see what's on the page
+            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_page_loading.png"))
+            
+            # Try again with extended timeout
             for selector in otp_selectors:
                 try:
                     elements = driver.find_elements(By.CSS_SELECTOR, selector)
@@ -221,6 +225,21 @@ try:
                             break
                 except:
                     continue
+            
+            # If still not found, try waiting for the input to appear
+            if not otp_present:
+                print("[OTP] Still not found - trying explicit wait...")
+                try:
+                    wait = WebDriverWait(driver, 10)
+                    otp_input = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'][maxlength='1'], input[type='tel'][maxlength='1']"))
+                    )
+                    otp_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'][maxlength='1'], input[type='tel'][maxlength='1']")
+                    otp_present = True
+                    print(f"[OTP] Found {len(otp_inputs)} OTP fields via explicit wait")
+                except Exception as wait_err:
+                    print(f"[OTP] ❌ Explicit wait failed: {str(wait_err)}")
+                    driver.save_screenshot(os.path.join(log_dir, "step_1_otp_inputs_not_found.png"))
         
         if otp_present or has_otp_text:
             print("[OTP] ⚠️  OTP verification required!")
@@ -331,6 +350,17 @@ try:
             if "login" in driver.current_url.lower():
                 print("[OTP] ⚠️  Still on login page after OTP - verification may have failed")
                 driver.save_screenshot(os.path.join(log_dir, "step_1_otp_verification_failed.png"))
+                
+                # Double-check if we're really stuck or just redirecting
+                time.sleep(3)
+                if "login" in driver.current_url.lower():
+                    # Check if there's an error message
+                    page_text = driver.page_source.lower()
+                    if any(err in page_text for err in ['invalid otp', 'incorrect otp', 'otp expired', 'otp is invalid']):
+                        print("[OTP] ❌ OTP verification failed - invalid/expired OTP")
+                        raise Exception("OTP verification failed - invalid/expired OTP")
+                    else:
+                        print("[OTP] ⚠️  Still on login page but no error - page might be loading slowly")
             else:
                 print("[✓] OTP verification completed successfully")
         else:
@@ -362,66 +392,58 @@ try:
     current_url = driver.current_url
     print(f"[DEBUG] Final URL after login: {current_url}")
     
-    # Check for logged-in indicators instead of just URL
-    # When logged in, we'll see user-specific elements
-    logged_in_indicators = [
-        "naukri360",  # Premium feature indicator
-        "My Naukri",  # Profile menu
-        "Profile Update",  # Profile update section
-        "//div[contains(@class, 'nI-gNb-drawer')]",  # User drawer
-        "//a[contains(@href, '/mnjuser/profile')]",  # Profile link
-        "//a[contains(@href, '/mnjuser/homepage')]",  # Homepage link
-    ]
+    # First, check if we're STILL on the login submission page (not redirected at all)
+    is_stuck_on_login = "nlogin/login" in current_url.lower() and "URL=" in current_url
     
-    is_logged_in = False
-    page_source = driver.page_source.lower()
-    
-    # Check for text indicators
-    if any(indicator.lower() in page_source for indicator in logged_in_indicators[:3]):
-        is_logged_in = True
-        print("[✓] Login detected: Found logged-in indicator in page")
-    
-    # Check for XPath indicators
-    if not is_logged_in:
-        for xpath in logged_in_indicators[3:]:
-            try:
-                if driver.find_elements(By.XPATH, xpath):
-                    is_logged_in = True
-                    print(f"[✓] Login detected: Found element {xpath}")
-                    break
-            except:
-                pass
-    
-    # Also check if we're on profile or homepage URLs
-    if not is_logged_in:
-        if "profile" in current_url or "homepage" in current_url or "mnjuser" in current_url:
-            # If URL looks right but no indicators found, still consider it logged in
-            # (better to proceed and fail later than to fail here unnecessarily)
-            is_logged_in = True
-            print("[✓] Login detected: URL indicates logged-in state")
-    
-    # Final check: if we're on login page with login/register buttons, we failed
-    if "login" in current_url.lower() and not is_logged_in:
-        # Double-check by looking for login form elements
+    if is_stuck_on_login:
+        print("[⚠️] Still on login/OTP page - checking if actually logged in...")
+        driver.save_screenshot(os.path.join(log_dir, "step_1_login_page_check.png"))
+        
+        # Look for login FORM elements - if present, we definitely failed
         try:
-            login_button = driver.find_elements(By.XPATH, "//button[contains(text(), 'Login')]")
-            email_field = driver.find_elements(By.CSS_SELECTOR, "input[placeholder*='Email' i]")
+            login_button = driver.find_elements(By.XPATH, "//button[contains(text(), 'Login') or contains(text(), 'login')]")
+            email_field = driver.find_elements(By.CSS_SELECTOR, "input[placeholder*='Email' i], input[placeholder*='email' i]")
+            password_field = driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
             
-            if login_button and email_field:
-                print("[ERROR] ❌ Still on login page - login failed!")
-                driver.save_screenshot(os.path.join(log_dir, "step_1_login_failed.png"))
-                raise Exception("Login failed - still on login page. OTP may not have been handled correctly.")
-        except Exception as check_error:
-            print(f"[DEBUG] Login form check error: {check_error}")
-            # If we can't determine, assume logged in and continue
-            is_logged_in = True
+            # If we can still see the login form, we're definitely not logged in
+            if (login_button and email_field) or password_field:
+                print("[ERROR] ❌ Login form still visible - login/OTP failed!")
+                print(f"[DEBUG] Login button found: {len(login_button) > 0}")
+                print(f"[DEBUG] Email field found: {len(email_field) > 0}")
+                print(f"[DEBUG] Password field found: {len(password_field) > 0}")
+                driver.save_screenshot(os.path.join(log_dir, "step_1_login_failed_form_visible.png"))
+                raise Exception("Login failed - login form still visible. OTP handling may have failed.")
+        except Exception as form_check_err:
+            if "Login failed" in str(form_check_err):
+                raise  # Re-raise our own exception
+            print(f"[DEBUG] Form check error (will proceed): {form_check_err}")
     
-    if not is_logged_in:
-        print("[ERROR] ❌ Could not verify login status")
+    # Check for logged-in indicators
+    page_source = driver.page_source.lower()
+    logged_in_indicators = {
+        'naukri360': 'naukri360' in page_source,
+        'my_naukri': 'my naukri' in page_source or 'mynaukri' in page_source,
+        'profile_link': '/mnjuser/profile' in page_source or '/mnjuser/homepage' in page_source,
+    }
+    
+    is_logged_in = any(logged_in_indicators.values())
+    positive_checks = sum(1 for v in logged_in_indicators.values() if v)
+    
+    print(f"[DEBUG] Login indicators: {logged_in_indicators}")
+    print(f"[DEBUG] Positive indicators: {positive_checks}/3")
+    
+    if is_logged_in:
+        print("[✓] Login verification passed - found logged-in indicators")
+    elif not is_stuck_on_login:
+        # URL changed but no clear indicators - probably okay
+        print("[✓] Login verification: URL changed (assuming success)")
+        is_logged_in = True
+    else:
+        print("[ERROR] ❌ Login verification failed - no logged-in indicators and still on login page")
         driver.save_screenshot(os.path.join(log_dir, "step_1_login_verification_failed.png"))
-        raise Exception("Login verification failed - could not confirm logged-in state")
+        raise Exception("Login verification failed - could not confirm successful login")
     
-    print("[✓] Login verification passed")
+    print("[✓] Login verification completed")
     driver.save_screenshot(os.path.join(log_dir, "step_1_login_success.png"))
 
     # Step 2: Profile
@@ -485,7 +507,7 @@ except Exception as e:
     print(f"[DEBUG] Current URL at error: {driver.current_url}")
     
     try:
-        driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
+    driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
         print(f"[INFO] Error screenshot saved")
     except:
         print("[WARN] Could not save error screenshot")
