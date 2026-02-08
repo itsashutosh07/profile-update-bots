@@ -1143,7 +1143,9 @@
             `;
 
             try {
+                console.log('Fetching from:', API_URL);
                 const response = await fetch(API_URL);
+                console.log('Response status:', response.status);
                 updateRateLimit(response);
                 
                 if (!response.ok) {
@@ -1166,15 +1168,22 @@
 
                 const data = await response.json();
                 let runs = data.workflow_runs || [];
+                
+                console.log('Total runs fetched:', runs.length);
 
                 // Filter to only show "Update Naukri Profile" workflow runs
                 runs = runs.filter(run => run.name === 'Update Naukri Profile');
+                
+                console.log('Filtered Naukri runs:', runs.length);
 
                 if (runs.length === 0) {
+                    const allRunNames = data.workflow_runs.map(r => r.name).join(', ');
                     contentDiv.innerHTML = `
                         <div class="empty-state">
-                            <h3>No workflow runs found</h3>
-                            <p>Workflow runs will appear here once they start executing.</p>
+                            <h3>No "Update Naukri Profile" runs found</h3>
+                            <p>Looking for workflow runs with name "Update Naukri Profile".</p>
+                            ${data.workflow_runs.length > 0 ? `<p style="margin-top: 10px; font-size: 0.9rem; color: #9ca3af;">Found ${data.workflow_runs.length} other workflow(s): ${allRunNames}</p>` : ''}
+                            <p style="margin-top: 15px;">Runs will appear here once the workflow executes.</p>
                         </div>
                     `;
                 } else {
