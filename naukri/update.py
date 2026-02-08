@@ -116,6 +116,31 @@ try:
         
         # Check if page content contains OTP-related text
         page_source = driver.page_source.lower()
+        
+        # Check for rate limiting first
+        rate_limit_keywords = [
+            'max limit to generate otp',
+            'reached max limit',
+            'try after 24 hours',
+            'too many otp requests',
+            'otp limit exceeded'
+        ]
+        
+        is_rate_limited = any(keyword in page_source for keyword in rate_limit_keywords)
+        
+        if is_rate_limited:
+            print("[OTP] 🚫 RATE LIMITED!")
+            print("[OTP] Naukri has blocked OTP generation due to too many requests.")
+            print("[OTP] This is expected when testing frequently.")
+            print("[OTP] The bot will try again on the next scheduled run (6 hours).")
+            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_rate_limited.png"))
+            
+            # Exit gracefully - this is not a failure, just need to wait
+            print("[INFO] Exiting gracefully - will retry on next schedule")
+            driver.quit()
+            print("[INFO] Browser closed.")
+            exit(0)  # Exit with success code since this is expected behavior
+        
         has_otp_text = any(text in page_source for text in ['enter the otp', 'enter otp', 'otp sent', 'verification code', 'otp to login'])
         
         print(f"[DEBUG] OTP-related text in page: {has_otp_text}")

@@ -2,8 +2,8 @@ name: Update Naukri Profile
 
 on:
   schedule:
-    # Runs every 2 hours
-    - cron: '0 */2 * * *'
+    # Runs every 6 hours (4 times per day: 12am, 6am, 12pm, 6pm UTC)
+    - cron: '0 */6 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
