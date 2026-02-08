@@ -34,6 +34,8 @@ jobs:
         pip install -r naukri/requirements.txt
     
     - name: Run update script
+      id: update
+      continue-on-error: true
       env:
         NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
         NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
@@ -41,7 +43,57 @@ jobs:
         GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
         GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
         HEADLESS: "true"
-      run: python3 naukri/update.py
+      run: |
+        echo "=== Starting Naukri Profile Update ==="
+        python3 naukri/update.py
+        EXIT_CODE=$?
+        echo "Script exited with code: $EXIT_CODE"
+        exit $EXIT_CODE
+    
+    - name: Check run status
+      if: always()
+      run: |
+        echo "=== Run Status Check ==="
+        
+        # Find the status file
+        STATUS_FILE=$(find "Logs Screenshot" -name "run_status.json" -type f | head -n 1)
+        
+        if [ -f "$STATUS_FILE" ]; then
+          echo "Status file found: $STATUS_FILE"
+          echo "--- Status Details ---"
+          cat "$STATUS_FILE"
+          echo "----------------------"
+          
+          # Extract status
+          STATUS=$(cat "$STATUS_FILE" | python3 -c "import sys, json; print(json.load(sys.stdin)['status'])")
+          MESSAGE=$(cat "$STATUS_FILE" | python3 -c "import sys, json; print(json.load(sys.stdin)['message'])")
+          
+          echo "Status: $STATUS"
+          echo "Message: $MESSAGE"
+          
+          case "$STATUS" in
+            "SUCCESS")
+              echo "✅ Profile updated successfully"
+              ;;
+            "RATE_LIMITED")
+              echo "🕒 Rate limited - will retry on next schedule"
+              echo "This is expected behavior, not a failure"
+              ;;
+            "FAILURE")
+              echo "❌ Update failed - check logs for details"
+              exit 1
+              ;;
+            *)
+              echo "⚠️ Unknown status: $STATUS"
+              ;;
+          esac
+        else
+          echo "⚠️ No status file found - check if script completed"
+          if [ "${{ steps.update.outcome }}" == "failure" ]; then
+            echo "❌ Script execution failed"
+            exit 1
+          fi
+        fi
     
     - name: Upload screenshots as artifacts
       if: always()

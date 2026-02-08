@@ -484,43 +484,70 @@
         // Detect actual status from job steps
         function detectActualStatus(jobs) {
             if (!jobs || jobs.length === 0) {
-                return { status: 'unknown', message: null };
+                return { status: 'unknown', message: null, icon: '' };
             }
 
             // Find the main update job
             const updateJob = jobs.find(j => j.name === 'update');
             if (!updateJob) {
-                return { status: 'unknown', message: null };
+                return { status: 'unknown', message: null, icon: '' };
             }
 
-            // Find the "Run update script" step
-            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script' || s.name.includes('update'));
-            
+            // NEW: Check for "Check run status" step (added in workflow improvement)
+            const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
+            if (statusCheckStep) {
+                // If status check step succeeded, profile was likely updated or rate limited (both OK)
+                if (statusCheckStep.conclusion === 'success') {
+                    // Check the update script step to determine which one
+                    const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
+                    if (updateStep && updateStep.conclusion === 'success') {
+                        return {
+                            status: 'success-verified',
+                            message: '✅ Profile updated successfully (verified)',
+                            icon: '✅'
+                        };
+                    }
+                    // If update step didn't fully succeed but status check did, likely rate limited
+                    return {
+                        status: 'rate-limited',
+                        message: '🕒 Rate limited by Naukri - will retry in 6 hours',
+                        icon: '🕒'
+                    };
+                } else if (statusCheckStep.conclusion === 'failure') {
+                    return {
+                        status: 'failure',
+                        message: '❌ Update failed - click View Logs for details',
+                        icon: '❌'
+                    };
+                }
+            }
+
+            // Fallback: Check the "Run update script" step
+            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
             if (updateStep) {
-                // Check step conclusion
                 if (updateStep.conclusion === 'success') {
-                    // Success - but could be rate limited (graceful exit)
-                    // We can't read logs without auth, so we show success with note
                     return { 
                         status: 'success', 
-                        message: 'Check logs to verify if profile was actually updated or rate limited'
+                        message: '✓ Workflow completed - verify in logs if needed',
+                        icon: '✓'
                     };
                 } else if (updateStep.conclusion === 'failure') {
                     return { 
                         status: 'failure', 
-                        message: 'Script execution failed - check logs for details'
+                        message: '❌ Script execution failed - check logs',
+                        icon: '❌'
                     };
                 }
             }
 
             // Fallback to workflow conclusion
             if (updateJob.conclusion === 'success') {
-                return { status: 'success', message: 'Workflow completed successfully' };
+                return { status: 'success', message: 'Workflow completed', icon: '✓' };
             } else if (updateJob.conclusion === 'failure') {
-                return { status: 'failure', message: 'Workflow failed' };
+                return { status: 'failure', message: 'Workflow failed', icon: '❌' };
             }
 
-            return { status: 'unknown', message: null };
+            return { status: 'unknown', message: null, icon: '❓' };
         }
 
         // Get trigger type icon and text
@@ -570,12 +597,26 @@
             const jobs = await fetchJobDetails(run.id);
             const actualStatus = detectActualStatus(jobs);
 
-            // Status message (if any)
+            // Status message (if any) with appropriate styling
             let statusMessage = '';
             if (actualStatus.message) {
+                let bgColor = 'rgba(255, 255, 255, 0.05)';
+                let borderColor = 'transparent';
+                
+                if (actualStatus.status === 'rate-limited') {
+                    bgColor = 'rgba(251, 191, 36, 0.1)';
+                    borderColor = 'rgba(251, 191, 36, 0.3)';
+                } else if (actualStatus.status === 'success-verified') {
+                    bgColor = 'rgba(16, 185, 129, 0.1)';
+                    borderColor = 'rgba(16, 185, 129, 0.3)';
+                } else if (actualStatus.status === 'failure') {
+                    bgColor = 'rgba(239, 68, 68, 0.1)';
+                    borderColor = 'rgba(239, 68, 68, 0.3)';
+                }
+                
                 statusMessage = `
-                    <div style="margin-top: 10px; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 6px; font-size: 0.85rem; color: #9ca3af;">
-                        ℹ️ ${actualStatus.message}
+                    <div style="margin-top: 10px; padding: 8px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; font-size: 0.85rem; color: #e0e0e0;">
+                        ${actualStatus.message}
                     </div>
                 `;
             }

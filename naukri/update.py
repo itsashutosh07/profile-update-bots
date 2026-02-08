@@ -1,5 +1,7 @@
 import os
+import sys
 import time
+import json
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
@@ -31,6 +33,27 @@ timestamp = datetime.now().strftime("%d-%m-%y_%I-%M_%p")
 log_dir = os.path.join("Logs Screenshot", timestamp)
 os.makedirs(log_dir, exist_ok=True)
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
+
+# Function to write status summary for dashboard
+def write_status_summary(status, message, details=None):
+    """
+    Write a status summary file that can be read by the dashboard
+    Status can be: SUCCESS, RATE_LIMITED, FAILURE, OTP_FAILED, LOGIN_FAILED
+    """
+    status_data = {
+        "status": status,
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+        "details": details or {}
+    }
+    
+    status_file = os.path.join(log_dir, "run_status.json")
+    try:
+        with open(status_file, 'w') as f:
+            json.dump(status_data, f, indent=2)
+        print(f"[STATUS] Written to {status_file}: {status}")
+    except Exception as e:
+        print(f"[WARN] Could not write status file: {e}")
 
 # Print ChromeDriver info only (skip broken chrome version detection on Windows)
 print("ChromeDriver path (via webdriver-manager):")
@@ -135,11 +158,18 @@ try:
             print("[OTP] The bot will try again on the next scheduled run (6 hours).")
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_rate_limited.png"))
             
+            # Write status summary
+            write_status_summary(
+                status="RATE_LIMITED",
+                message="Naukri rate limited OTP requests. Will retry in next scheduled run.",
+                details={"retry_in": "6 hours", "expected": True}
+            )
+            
             # Exit gracefully - this is not a failure, just need to wait
             print("[INFO] Exiting gracefully - will retry on next schedule")
             driver.quit()
             print("[INFO] Browser closed.")
-            exit(0)  # Exit with success code since this is expected behavior
+            sys.exit(0)  # Exit with success code since this is expected behavior
         
         has_otp_text = any(text in page_source for text in ['enter the otp', 'enter otp', 'otp sent', 'verification code', 'otp to login'])
         
@@ -376,15 +406,36 @@ try:
     time.sleep(3)
     print("[✓] Resume Headline updated")
     driver.save_screenshot(os.path.join(log_dir, "step_5_save_clicked.png"))
+    
+    # Write success status
+    write_status_summary(
+        status="SUCCESS",
+        message="Profile headline updated successfully",
+        details={"profile_section": "Resume Headline", "automated": True}
+    )
+    print("[✅] Profile update completed successfully!")
 
 except Exception as e:
-    print(f"[ERROR] {type(e).__name__}: {str(e)}")
+    error_type = type(e).__name__
+    error_msg = str(e)
+    print(f"[ERROR] {error_type}: {error_msg}")
     print(f"[DEBUG] Current URL at error: {driver.current_url}")
+    
     try:
         driver.save_screenshot(os.path.join(log_dir, "error_occurred.png"))
         print(f"[INFO] Error screenshot saved")
     except:
         print("[WARN] Could not save error screenshot")
+    
+    # Write failure status
+    write_status_summary(
+        status="FAILURE",
+        message=f"Script failed: {error_type}",
+        details={"error": error_msg, "error_type": error_type, "url": driver.current_url}
+    )
+    
+    # Exit with error code
+    sys.exit(1)
 
 finally:
     driver.quit()
