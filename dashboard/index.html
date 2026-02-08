@@ -853,32 +853,35 @@
                 };
             }
 
-            // Check for "Check run status" step
+            // Check for "Check run status" step (new runs have this)
             const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
             const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
             
             // Find failed steps
             const failedSteps = updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
 
-            if (statusCheckStep && statusCheckStep.conclusion === 'success') {
-                if (updateStep && updateStep.conclusion === 'success') {
-                    return {
-                        actualStatus: 'Success',
-                        statusIcon: '✅',
-                        statusClass: 'success-box',
-                        description: 'Profile headline was successfully updated on Naukri.com',
-                        errorInfo: null
-                    };
-                } else {
-                    return {
-                        actualStatus: 'Rate Limited',
-                        statusIcon: '🕒',
-                        statusClass: 'warning-box',
-                        description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
-                        errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
-                    };
-                }
-            } else if (statusCheckStep && statusCheckStep.conclusion === 'failure') {
+            // NEW RUNS: Have "Check run status" step
+            if (statusCheckStep) {
+                if (statusCheckStep.conclusion === 'success') {
+                    if (updateStep && updateStep.conclusion === 'success') {
+                        return {
+                            actualStatus: 'Success',
+                            statusIcon: '✅',
+                            statusClass: 'success-box',
+                            description: 'Profile headline was successfully updated on Naukri.com',
+                            errorInfo: null
+                        };
+                    } else {
+                        // Status check passed but update had issues = Rate limited
+                        return {
+                            actualStatus: 'Rate Limited',
+                            statusIcon: '🕒',
+                            statusClass: 'warning-box',
+                            description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
+                            errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                        };
+                    }
+                } else if (statusCheckStep.conclusion === 'failure') {
                 const errorDetails = failedSteps.map(s => `Step "${s.name}" failed`).join(', ');
                 return {
                     actualStatus: 'Failed',
@@ -887,14 +890,18 @@
                     description: 'The profile update script encountered an error and failed to complete.',
                     errorInfo: errorDetails || 'Check the complete logs for detailed error information'
                 };
-            } else if (updateStep) {
+            }
+            
+            // OLD RUNS: Don't have "Check run status" step (before we added it)
+            // Can't distinguish between success and rate limiting reliably
+            else if (updateStep) {
                 if (updateStep.conclusion === 'success') {
                     return {
                         actualStatus: 'Completed',
-                        statusIcon: '✓',
-                        statusClass: 'success-box',
-                        description: 'Workflow completed successfully',
-                        errorInfo: null
+                        statusIcon: '⚠️',
+                        statusClass: 'warning-box',
+                        description: 'Workflow completed. This is an older run without detailed status tracking.',
+                        errorInfo: 'Click "View Complete Logs" to verify if the profile was actually updated or if it was rate limited. Newer runs show accurate status automatically.'
                     };
                 } else if (updateStep.conclusion === 'failure') {
                     const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
@@ -991,6 +998,13 @@
                 // Flip back to front
                 card.classList.remove('flipped');
                 container.classList.remove('expanded');
+                
+                // Reset height to normal after animation
+                setTimeout(() => {
+                    card.style.height = '';
+                    container.style.minHeight = '';
+                }, 600);
+                
                 return;
             }
 
@@ -1026,6 +1040,10 @@
                 // Get run info
                 const runs = JSON.parse(sessionStorage.getItem('cachedRuns') || '[]');
                 const run = runs.find(r => r.id === runId);
+                
+                // Get the actual job URL (not just run URL)
+                const updateJob = jobs?.find(j => j.name === 'update');
+                const jobUrl = updateJob?.html_url || run?.html_url;
 
                 backEl.innerHTML = `
                     <div class="back-content">
@@ -1063,7 +1081,7 @@
                         </div>
 
                         <div class="back-footer" style="justify-content: center;">
-                            <button class="back-btn btn-primary" onclick="event.stopPropagation(); window.open('${run?.html_url}', '_blank')" title="Open full workflow logs on GitHub" style="width: auto; padding: 12px 24px;">
+                            <button class="back-btn btn-primary" onclick="event.stopPropagation(); window.open('${jobUrl}', '_blank')" title="Open job logs directly on GitHub" style="width: auto; padding: 12px 24px;">
                                 📋 View Complete Logs →
                             </button>
                         </div>
