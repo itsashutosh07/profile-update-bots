@@ -108,6 +108,13 @@
             color: #10b981;
         }
 
+        #statusBreakdown {
+            font-size: 1rem !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Controls */
         .controls {
             display: flex;
@@ -713,7 +720,6 @@
                     <button class="filter-btn active" data-filter="all" onclick="filterRuns('all')">All</button>
                     <button class="filter-btn" data-filter="success" onclick="filterRuns('success')">✅ Success</button>
                     <button class="filter-btn" data-filter="failure" onclick="filterRuns('failure')">❌ Failed</button>
-                    <button class="filter-btn" data-filter="rate-limited" onclick="filterRuns('rate-limited')">🕒 Rate Limited</button>
                 </div>
             </div>
             <div class="last-updated">
@@ -744,7 +750,7 @@
         // Configuration - Update these values
         const GITHUB_OWNER = 'itsashutosh07';
         const GITHUB_REPO = 'profile-update-bots';
-        const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=30`;
+        const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=50`;
 
         // Cache for job details to avoid repeated API calls
         const jobDetailsCache = new Map();
@@ -1326,9 +1332,21 @@
             // So we show success/failed based on workflow conclusion
             const otherCount = stats.total - stats.successful - stats.failed;
             const breakdownHTML = `
-                <span style="color: #10b981;">✅ ${stats.successful}</span>
-                ${stats.failed > 0 ? `<span style="color: #ef4444; margin-left: 8px;">❌ ${stats.failed}</span>` : ''}
-                ${otherCount > 0 ? `<span style="color: #fbbf24; margin-left: 8px;">⚠️ ${otherCount}</span>` : ''}
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                    <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 4px 12px; border-radius: 12px; font-size: 0.9rem; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        ✅ ${stats.successful}
+                    </span>
+                    ${stats.failed > 0 ? `
+                        <span style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 4px 12px; border-radius: 12px; font-size: 0.9rem; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            ❌ ${stats.failed}
+                        </span>
+                    ` : ''}
+                    ${otherCount > 0 ? `
+                        <span style="background: rgba(251, 191, 36, 0.1); color: #fbbf24; padding: 4px 12px; border-radius: 12px; font-size: 0.9rem; border: 1px solid rgba(251, 191, 36, 0.3);">
+                            ⚠️ ${otherCount}
+                        </span>
+                    ` : ''}
+                </div>
             `;
             document.getElementById('statusBreakdown').innerHTML = breakdownHTML;
         }
@@ -1351,10 +1369,6 @@
                 filteredRuns = allRuns.filter(r => r.conclusion === 'success');
             } else if (filterType === 'failure') {
                 filteredRuns = allRuns.filter(r => r.conclusion === 'failure');
-            } else if (filterType === 'rate-limited') {
-                // Show runs that succeeded but might be rate-limited
-                // (we can't know for sure without job details, so this is approximate)
-                filteredRuns = allRuns.filter(r => r.conclusion === 'success');
             }
 
             // Re-render filtered runs
