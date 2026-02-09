@@ -1413,10 +1413,10 @@
             const countElement = document.getElementById('visitorCount');
             
             try {
-                // V1 API - simpler, no authentication required
-                // Endpoint: /v1/{namespace}/{key}/{action}
-                const response = await fetch('https://api.counterapi.dev/v1/naukri-profile-bots-team-2844/visits/up', {
-                    method: 'GET'
+                // V2 API - try without auth first (public workspace)
+                // Endpoint: /v2/{workspace}/{counter-slug}/up
+                const response = await fetch('https://api.counterapi.dev/v2/naukri-profile-bots-team-2844/first-counter-2844/up', {
+                    method: 'POST'
                 });
                 
                 if (!response.ok) {
@@ -1425,9 +1425,9 @@
                 
                 const result = await response.json();
                 
-                // V1 API returns 'count' field
+                // V2 API returns 'value' field, fallback to 'count'
                 // Format number with commas (1234 -> 1,234)
-                const count = result.count || result.value || 0;
+                const count = result.value || result.count || 0;
                 const formattedCount = count.toLocaleString('en-US');
                 
                 countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
