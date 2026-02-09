@@ -118,6 +118,34 @@
             gap: 15px;
         }
 
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: #2d2d2d;
+            color: #9ca3af;
+            border: 1px solid #3a3a3a;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        .filter-btn.active {
+            background: #265DF5;
+            color: white;
+            border-color: #265DF5;
+        }
+
         .refresh-btn {
             background: #265DF5;
             color: white;
@@ -665,17 +693,29 @@
                 <div class="stat-label">Last Run</div>
                 <div class="stat-value" id="lastRun">-</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Status Breakdown</div>
+                <div class="stat-value" id="statusBreakdown" style="font-size: 1.2rem;">-</div>
+            </div>
         </div>
 
         <!-- Controls -->
         <div class="controls">
-            <button class="refresh-btn" id="refreshBtn" onclick="loadRuns()">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                </svg>
-                Refresh
-            </button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button class="refresh-btn" id="refreshBtn" onclick="loadRuns()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                    </svg>
+                    Refresh
+                </button>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all" onclick="filterRuns('all')">All</button>
+                    <button class="filter-btn" data-filter="success" onclick="filterRuns('success')">✅ Success</button>
+                    <button class="filter-btn" data-filter="failure" onclick="filterRuns('failure')">❌ Failed</button>
+                    <button class="filter-btn" data-filter="rate-limited" onclick="filterRuns('rate-limited')">🕒 Rate Limited</button>
+                </div>
+            </div>
             <div class="last-updated">
                 Last updated: <span id="lastUpdated">Never</span>
             </div>
@@ -712,6 +752,10 @@
         // Rate limit tracking
         let rateLimitRemaining = 60;
         let rateLimitReset = null;
+
+        // Store all runs for filtering
+        let allRuns = [];
+        let currentFilter = 'all';
 
         // Security: HTML escape function to prevent XSS
         function escapeHtml(unsafe) {
@@ -1257,6 +1301,7 @@
         function calculateStats(runs) {
             const total = runs.length;
             const successful = runs.filter(r => r.conclusion === 'success').length;
+            const failed = runs.filter(r => r.conclusion === 'failure').length;
             const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
             
             const lastRun = runs[0];
@@ -1266,7 +1311,7 @@
                 lastStatus = status.charAt(0).toUpperCase() + status.slice(1);
             }
 
-            return { total, successRate, lastStatus };
+            return { total, successful, failed, successRate, lastStatus };
         }
 
         // Update stats display
@@ -1275,6 +1320,56 @@
             document.getElementById('totalRuns').textContent = stats.total;
             document.getElementById('successRate').textContent = `${stats.successRate}%`;
             document.getElementById('lastRun').textContent = stats.lastStatus;
+            
+            // Update status breakdown badge
+            // Note: We can't determine actual rate-limited vs success without job details
+            // So we show success/failed based on workflow conclusion
+            const otherCount = stats.total - stats.successful - stats.failed;
+            const breakdownHTML = `
+                <span style="color: #10b981;">✅ ${stats.successful}</span>
+                ${stats.failed > 0 ? `<span style="color: #ef4444; margin-left: 8px;">❌ ${stats.failed}</span>` : ''}
+                ${otherCount > 0 ? `<span style="color: #fbbf24; margin-left: 8px;">⚠️ ${otherCount}</span>` : ''}
+            `;
+            document.getElementById('statusBreakdown').innerHTML = breakdownHTML;
+        }
+
+        // Filter runs by status
+        function filterRuns(filterType) {
+            currentFilter = filterType;
+            
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === filterType) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Filter runs based on type
+            let filteredRuns = allRuns;
+            if (filterType === 'success') {
+                filteredRuns = allRuns.filter(r => r.conclusion === 'success');
+            } else if (filterType === 'failure') {
+                filteredRuns = allRuns.filter(r => r.conclusion === 'failure');
+            } else if (filterType === 'rate-limited') {
+                // Show runs that succeeded but might be rate-limited
+                // (we can't know for sure without job details, so this is approximate)
+                filteredRuns = allRuns.filter(r => r.conclusion === 'success');
+            }
+
+            // Re-render filtered runs
+            const contentDiv = document.getElementById('content');
+            if (filteredRuns.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No ${filterType === 'all' ? '' : filterType} runs found</h3>
+                        <p>Try selecting a different filter.</p>
+                    </div>
+                `;
+            } else {
+                const runsHTML = filteredRuns.map((run, index) => createRunCard(run, index)).join('');
+                contentDiv.innerHTML = `<div class="runs-grid">${runsHTML}</div>`;
+            }
         }
 
         // Fetch and display runs
@@ -1335,11 +1430,23 @@
                     // Sort runs by creation date (most recent first)
                     runs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+                    // Store all runs globally for filtering
+                    allRuns = runs;
+
                     // Store runs in session storage for card flip access
                     sessionStorage.setItem('cachedRuns', JSON.stringify(runs));
 
-                    // Update stats
-                    updateStats(runs);
+                    // Update stats (always use all runs for stats)
+                    updateStats(allRuns);
+
+                    // Reset filter to 'all' and update button states
+                    currentFilter = 'all';
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.filter === 'all') {
+                            btn.classList.add('active');
+                        }
+                    });
 
                     // Create runs grid (synchronous now)
                     const runsHTML = runs.map((run, index) => createRunCard(run, index)).join('');
