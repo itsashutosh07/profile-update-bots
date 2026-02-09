@@ -1407,24 +1407,21 @@
     </script>
     
     <!-- CounterAPI.dev SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@counterapi/sdk@latest/dist/counterapi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/counterapi/dist/counter.browser.min.js"></script>
     <script>
         // Visitor Counter using CounterAPI.dev
         async function updateVisitorCount() {
             const countElement = document.getElementById('visitorCount');
             
             try {
-                // Initialize CounterAPI client
-                const counter = new CounterAPI();
-                
-                // Counter configuration
-                const counterName = 'profile-bot-dashboard-visits';
+                // Initialize Counter client with workspace
+                const counter = new Counter({ workspace: 'profile-bot-dashboard' });
                 
                 // Increment counter and get new value
-                const result = await counter.increment(counterName);
+                const result = await counter.up('visits');
                 
                 // Format number with commas (1234 -> 1,234)
-                const formattedCount = result.count.toLocaleString('en-US');
+                const formattedCount = result.value.toLocaleString('en-US');
                 
                 countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
                 countElement.classList.add('loaded');
