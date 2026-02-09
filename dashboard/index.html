@@ -1413,10 +1413,14 @@
             const countElement = document.getElementById('visitorCount');
             
             try {
-                // Direct API call to increment counter
-                // Parameters: workspace slug + counter name in URL path
-                const response = await fetch('https://api.counterapi.dev/v1/naukri-profile-bots-team-2844/visits/up', {
-                    method: 'POST'
+                // V2 API call to increment counter
+                // Endpoint: /v2/{workspace}/{counter-key}
+                const response = await fetch('https://api.counterapi.dev/v2/naukri-profile-bots-team-2844/visits', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action: 'up' })
                 });
                 
                 if (!response.ok) {
@@ -1425,8 +1429,10 @@
                 
                 const result = await response.json();
                 
+                // V2 API returns 'value' field
                 // Format number with commas (1234 -> 1,234)
-                const formattedCount = result.count.toLocaleString('en-US');
+                const count = result.value || result.count || 0;
+                const formattedCount = count.toLocaleString('en-US');
                 
                 countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
                 countElement.classList.add('loaded');
