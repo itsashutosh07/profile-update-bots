@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com https://api.counterapi.dev; img-src 'self' data:;">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -616,6 +616,17 @@
         .footer a:hover {
             text-decoration: underline;
         }
+
+        #visitorCount {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #visitorCount.loaded {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -684,6 +695,8 @@
             <a href="https://github.com/itsashutosh07/profile-update-bots" target="_blank" rel="noopener noreferrer">View Repository</a>
             <br>
             Made with ❤️ by Ashutosh Jaiswal
+            <br>
+            <span id="visitorCount">Loading page impressions...</span>
         </div>
     </div>
 
@@ -1391,6 +1404,39 @@
 
         // Load runs on page load
         document.addEventListener('DOMContentLoaded', loadRuns);
+    </script>
+    
+    <!-- CounterAPI.dev SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@counterapi/sdk@latest/dist/counterapi.min.js"></script>
+    <script>
+        // Visitor Counter using CounterAPI.dev
+        async function updateVisitorCount() {
+            const countElement = document.getElementById('visitorCount');
+            
+            try {
+                // Initialize CounterAPI client
+                const counter = new CounterAPI();
+                
+                // Counter configuration
+                const counterName = 'profile-bot-dashboard-visits';
+                
+                // Increment counter and get new value
+                const result = await counter.increment(counterName);
+                
+                // Format number with commas (1234 -> 1,234)
+                const formattedCount = result.count.toLocaleString('en-US');
+                
+                countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
+                countElement.classList.add('loaded');
+            } catch (error) {
+                console.error('Failed to load visitor count:', error);
+                countElement.textContent = 'Page impressions unavailable';
+                countElement.classList.add('loaded');
+            }
+        }
+
+        // Call on page load (after DOM and SDK loaded)
+        window.addEventListener('load', updateVisitorCount);
     </script>
 </body>
 </html>
