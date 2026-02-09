@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com https://api.counterapi.dev; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com https://api.countapi.xyz; img-src 'self' data:;">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1406,34 +1406,16 @@
         document.addEventListener('DOMContentLoaded', loadRuns);
     </script>
     
-    <!-- Visitor Counter using CounterAPI.dev REST API -->
+    <!-- Visitor Counter using CountAPI.xyz (Simple & Secure) -->
     <script>
-        // ⚠️ WARNING: Token is obfuscated but NOT secure! 
-        // Anyone can see it in Network tab (F12 → Network)
-        // Obfuscated credentials (Base64 + XOR cipher)
-        const _0x4a2f = 'Fh0dSxQaQhsbFEIZBBAQSRsfRw4XQxAZSw4bXxQcBx0aQRBLQxoaSRBeQRscFB0=';
-        const _0x7b3e = 0x2A;
-        
-        // Decoder function
-        function _0xAuth() {
-            return atob(_0x4a2f).split('').map((c, i) => 
-                String.fromCharCode(c.charCodeAt(0) ^ (_0x7b3e + (i % 3)))
-            ).join('');
-        }
-        
-        // Visitor Counter using direct REST API (no SDK needed)
+        // Visitor Counter - No authentication required!
         async function updateVisitorCount() {
             const countElement = document.getElementById('visitorCount');
             
             try {
-                // V2 API with obfuscated authentication
-                // Endpoint: /v2/{workspace}/{counter-slug}/up
-                const response = await fetch('https://api.counterapi.dev/v2/naukri-profile-bots-team-2844/first-counter-2844/up', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${_0xAuth()}`
-                    }
-                });
+                // CountAPI.xyz - simple, free, no auth needed
+                // Endpoint: /hit/{namespace}/{key}
+                const response = await fetch('https://api.countapi.xyz/hit/naukri-profile-bot/dashboard-visits');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1441,9 +1423,9 @@
                 
                 const result = await response.json();
                 
-                // V2 API returns 'value' field, fallback to 'count'
+                // CountAPI.xyz returns 'value' field
                 // Format number with commas (1234 -> 1,234)
-                const count = result.value || result.count || 0;
+                const count = result.value || 0;
                 const formattedCount = count.toLocaleString('en-US');
                 
                 countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
