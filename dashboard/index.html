@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com https://api.countapi.xyz; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com; connect-src 'self' https://api.github.com https://api.counterapi.dev; img-src 'self' data:;">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta http-equiv="X-Frame-Options" content="DENY">
     <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1406,16 +1406,16 @@
         document.addEventListener('DOMContentLoaded', loadRuns);
     </script>
     
-    <!-- Visitor Counter using CountAPI.xyz (Simple & Secure) -->
+    <!-- Visitor Counter using CounterAPI.dev V1 (Public, No Auth) -->
     <script>
-        // Visitor Counter - No authentication required!
+        // Visitor Counter - V1 API (no authentication required!)
         async function updateVisitorCount() {
             const countElement = document.getElementById('visitorCount');
             
             try {
-                // CountAPI.xyz - simple, free, no auth needed
-                // Endpoint: /hit/{namespace}/{key}
-                const response = await fetch('https://api.countapi.xyz/hit/naukri-profile-bot/dashboard-visits');
+                // CounterAPI.dev V1 - public API, no auth needed
+                // Endpoint: /v1/{namespace}/{key}/up
+                const response = await fetch('https://api.counterapi.dev/v1/naukri-profile-bots-team-2844/first-counter-2844/up');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1423,9 +1423,9 @@
                 
                 const result = await response.json();
                 
-                // CountAPI.xyz returns 'value' field
+                // V1 API returns 'count' field
                 // Format number with commas (1234 -> 1,234)
-                const count = result.value || 0;
+                const count = result.count || 0;
                 const formattedCount = count.toLocaleString('en-US');
                 
                 countElement.textContent = `Total page impressions: ${formattedCount} 👁️`;
