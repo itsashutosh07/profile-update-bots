@@ -2,8 +2,14 @@ name: Update Naukri Profile
 
 on:
   schedule:
-    # Runs once daily at 6:00 AM IST (12:30 AM UTC)
-    - cron: '30 0 * * *'
+    # Runs 6 times per day (scheduled 3 hours early to account for GitHub Actions delay)
+    # Target times: 5 AM, 8:30 AM, 11 AM, 12:30 PM, 3 PM, 5:30 PM IST
+    - cron: '30 20 * * *'  # 8:30 PM UTC = 2:00 AM IST (→ ~5:00 AM with delay)
+    - cron: '0 0 * * *'    # 12:00 AM UTC = 5:30 AM IST (→ ~8:30 AM with delay)
+    - cron: '30 2 * * *'   # 2:30 AM UTC = 8:00 AM IST (→ ~11:00 AM with delay)
+    - cron: '0 4 * * *'    # 4:00 AM UTC = 9:30 AM IST (→ ~12:30 PM with delay)
+    - cron: '30 6 * * *'   # 6:30 AM UTC = 12:00 PM IST (→ ~3:00 PM with delay)
+    - cron: '0 9 * * *'    # 9:00 AM UTC = 2:30 PM IST (→ ~5:30 PM with delay)
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
