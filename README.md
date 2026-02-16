@@ -67,16 +67,19 @@ A beautiful, minimal dashboard to track workflow runs, success rates, and execut
 
 Full automation support with:
 - ✅ Automatic login with credentials
-- ✅ OTP handling via Gmail API
+- ✅ OTP handling via Gmail API ⚡ **Lifetime tokens**
 - ✅ Profile headline updates
 - ✅ Rate limit detection and handling
-- ✅ Scheduled runs (once daily at 6:00 AM IST)
+- ✅ Scheduled runs (5x daily - optimized for Naukri's limits)
 - ✅ Screenshot logging for debugging
 - ✅ Error handling and recovery
+- ✅ **Zero maintenance** - runs indefinitely
 
-**Status**: ⭐ Fully Operational
+**Status**: ⭐ Fully Operational | 🚀 Zero-config after setup
 
-📚 **Documentation**: See [`naukri/README.md`](naukri/README.md) for detailed setup
+📚 **Setup Guides**: 
+- Quick Start: [`naukri/README.md`](naukri/README.md)
+- **Gmail API (Lifetime Tokens)**: [`naukri/GMAIL_API_SETUP.md`](naukri/GMAIL_API_SETUP.md) ⚡ **NEW**
 
 ---
 
@@ -87,12 +90,14 @@ Full automation support with:
 - OAuth2 authentication for Gmail API
 - No plain-text passwords in code
 - Read-only Gmail access
+- ⚡ **Lifetime tokens** (publish app = no 7-day expiration)
 
 ### 🤖 Fully Automated
 - Runs on GitHub Actions (100% free)
 - No server or hosting costs
-- Scheduled execution (every 6 hours)
+- Scheduled execution (5x daily)
 - Manual trigger option available
+- **Zero maintenance** once configured
 
 ### 🛡️ Robust & Reliable
 - Anti-bot detection measures
@@ -114,7 +119,7 @@ Full automation support with:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     GitHub Actions Workflow                  │
-│                (Runs Daily at 6:00 AM IST)                   │
+│       (Runs 5x Daily: 5AM, 8:30AM, 11AM, 2PM, 5PM IST)     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -165,7 +170,7 @@ Full automation support with:
 - Gmail account (for OTP reading)
 - Account on target job portal (e.g., Naukri.com)
 
-### Setup Time: ~20 minutes
+### Setup Time: ~20-25 minutes
 
 1. **Clone this repository**
    ```bash
@@ -178,21 +183,30 @@ Full automation support with:
    cd naukri  # Currently the only supported platform
    ```
 
-3. **Follow platform-specific setup**
-   - For Naukri: See [`naukri/QUICK_START_OTP.md`](naukri/QUICK_START_OTP.md)
-   - Detailed guide: [`naukri/GMAIL_API_SETUP.md`](naukri/GMAIL_API_SETUP.md)
+3. **⚡ Set up Gmail API with LIFETIME tokens** (CRITICAL)
+   - **Must Read**: [`naukri/GMAIL_API_SETUP.md`](naukri/GMAIL_API_SETUP.md)
+   - Follow Step 2.2: **Publish your app** to avoid 7-day token expiration
+   - Without publishing: Tokens expire every 7 days ❌
+   - With publishing: Tokens last forever ✅
+   - Quick guide: [`naukri/QUICK_START_OTP.md`](naukri/QUICK_START_OTP.md)
 
-4. **Configure GitHub Actions**
-   - Add secrets to your repository
-   - Enable GitHub Actions
-   - Workflow runs automatically!
+4. **Configure GitHub Secrets**
+   - Add 5 secrets total (2 for Naukri, 3 for Gmail)
+   - Names must be exact (case-sensitive)
+   - All credentials encrypted by GitHub
+
+5. **Deploy and Forget!**
+   - GitHub Actions runs automatically
+   - No maintenance required
+   - Monitor via [live dashboard](https://itsashutosh07.github.io/profile-update-bots/)
 
 ### Run Schedule
 
-- **Frequency**: Once daily
-- **Time**: 6:00 AM IST (12:30 AM UTC)
+- **Frequency**: 5 times daily (optimized for Naukri's OTP limits)
+- **Times**: 5:00 AM, 8:30 AM, 11:00 AM, 2:00 PM, 5:00 PM IST
 - **Manual trigger**: Available anytime via Actions tab
-- **Why once daily?**: Prevents rate limiting and account restrictions
+- **Token lifetime**: ♾️ Forever (if app is published)
+- **Why 5x daily?**: Maximizes visibility while respecting Naukri's 5 OTP/day limit
 
 ---
 
@@ -336,17 +350,21 @@ python3 update.py
 ### Naukri Bot (Current)
 
 - **Active Users**: Growing community
-- **Success Rate**: ~95% (with proper setup)
+- **Success Rate**: ~83-95% (with proper setup)
 - **Average Runtime**: 1-2 minutes per execution
-- **GitHub Actions Minutes Used**: ~30-40 min/month (out of 2000 free)
+- **Schedule**: 5 runs/day × 30 days = 150 runs/month
+- **GitHub Actions Minutes Used**: ~200-300 min/month (out of 2000 free)
+- **Cost**: $0 (100% free tier)
+- **Maintenance**: Zero (after initial 20-min setup)
 
 ### Why GitHub Actions?
 
-- ✅ **100% Free** (2000 minutes/month)
+- ✅ **100% Free** (2000 minutes/month for public repos)
 - ✅ **No Server Needed** (runs in the cloud)
-- ✅ **Reliable** (99.9% uptime)
-- ✅ **Secure** (encrypted secrets)
-- ✅ **Logs & Artifacts** (debugging made easy)
+- ✅ **Reliable** (99.9% uptime SLA)
+- ✅ **Secure** (encrypted secrets, read-only Gmail access)
+- ✅ **Logs & Artifacts** (debugging made easy with screenshots)
+- ✅ **Zero maintenance** (lifetime tokens = no manual renewal)
 
 ---
 
@@ -359,6 +377,7 @@ python3 update.py
 ✅ Read-only Gmail access  
 ✅ All code is open source (audit anytime)  
 ✅ No data collection or tracking  
+✅ **Lifetime tokens** via published OAuth app (no expiration)
 
 ### What We Don't Do
 
@@ -366,6 +385,16 @@ python3 update.py
 ❌ Send data to third parties  
 ❌ Track user behavior  
 ❌ Access more than necessary  
+❌ Require app verification (personal use only)
+
+### Gmail API Token Lifetime
+
+**Important**: By default, Gmail OAuth tokens in "Testing" mode expire after 7 days. This bot's setup guide shows you how to **publish your app** (takes 1 minute) to make tokens last forever.
+
+- **Testing mode** ❌ Tokens expire every 7 days
+- **Published mode** ✅ Tokens last indefinitely
+
+**Is publishing safe?** Yes! Publishing doesn't make your app "public" - it just removes the 7-day token limit. Your credentials remain private in GitHub Secrets. See [`naukri/GMAIL_API_SETUP.md`](naukri/GMAIL_API_SETUP.md) for details.  
 
 ---
 

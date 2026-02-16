@@ -1,19 +1,45 @@
 # Gmail API Setup Guide for OTP Auto-Reading
 
-This guide will help you set up Gmail API to automatically read OTP codes from your email.
+This guide will help you set up Gmail API to automatically read OTP codes from your email and **make your bot run indefinitely**.
 
-**Time Required**: ~15 minutes  
-**Cost**: FREE
+**Time Required**: ~20 minutes  
+**Cost**: FREE  
+**Token Validity**: ⚡ **LIFETIME** (if you follow Step 2.3)
+
+---
+
+## 🚨 IMPORTANT: Make Your Tokens Last FOREVER
+
+By default, Google OAuth apps in "Testing" mode have tokens that **expire after 7 days**. This guide will show you how to make them **last forever** by publishing your app. Don't worry - publishing is safe and keeps your credentials private!
+
+**Without publishing:** Tokens expire after 7 days ❌  
+**With publishing:** Tokens last forever ✅
 
 ---
 
 ## 📋 Overview
 
 The bot needs to:
-1. Access your Gmail
+1. Access your Gmail (read-only)
 2. Read emails from Naukri
 3. Extract the OTP code
 4. Enter it automatically
+5. **Run indefinitely** without token expiration
+
+### 🚀 Quick Summary for New Users
+
+If you're cloning this project, here's what you'll do:
+
+1. **Enable Gmail API** in Google Cloud Console (~5 min)
+2. **Configure OAuth consent screen** (~5 min)
+3. **⚡ Publish your app** to make tokens last forever (~1 min)
+4. **Create OAuth credentials** (Client ID + Secret) (~2 min)
+5. **Generate refresh token** using provided script (~5 min)
+6. **Add 3 secrets to GitHub** (~2 min)
+7. **Test and deploy** - Bot runs automatically! (~5 min)
+
+**Total Time:** ~20-25 minutes for complete setup  
+**Result:** Bot runs indefinitely, updating your Naukri profile 5x daily automatically
 
 ---
 
@@ -64,123 +90,182 @@ Visit: https://console.cloud.google.com/
 
 8. Review and click **"Back to Dashboard"**
 
-### 2.2 Create OAuth2 Client ID
+### 2.2 Publish Your App (CRITICAL for Lifetime Tokens!)
+
+🔥 **THIS STEP MAKES YOUR TOKENS LAST FOREVER!** 🔥
+
+After configuring the OAuth consent screen, you need to publish your app to prevent token expiration.
+
+1. On the OAuth consent screen page, you'll see your app status as **"Testing"**
+2. Look for the **"PUBLISH APP"** button (usually at the top)
+3. Click **"PUBLISH APP"**
+4. You'll see a warning: *"Your app will be available to any user with a Google Account"*
+   - **Don't panic!** This doesn't mean your app is publicly accessible
+   - Only people with your Client ID + Client Secret + Refresh Token can use it
+   - These credentials are safely stored in GitHub Secrets (encrypted)
+5. Click **"Confirm"** to publish
+
+**What Publishing Does:**
+- ✅ Testing Mode: Tokens expire after 7 days
+- ✅ Published Mode: Tokens **NEVER expire** (unless manually revoked)
+
+**Is It Safe?**
+- ✅ Your credentials remain private in GitHub Secrets
+- ✅ No public website or app store listing is created
+- ✅ Only YOU will use the app
+- ✅ You can unpublish or revoke access anytime
+
+**Do I Need Verification?**
+- ❌ NO! Google may show a "verification required" notice
+- This is only for apps distributed to 100+ users publicly
+- For personal use, you can ignore it completely
+- The app works perfectly without verification
+
+**After publishing**, your app status will show **"In production"** or **"Published"**.
+
+### 2.4 Create OAuth2 Client ID
 1. Go to: https://console.cloud.google.com/apis/credentials
 2. Click **"Create Credentials"** → **"OAuth client ID"**
 3. Select **"Desktop app"** as application type
 4. Name it: `Naukri Bot Desktop`
 5. Click **"Create"**
-6. **IMPORTANT**: Download the JSON file (click "Download JSON")
-7. Note down:
+6. A popup will show your credentials:
    - **Client ID** (looks like: `xxxxx.apps.googleusercontent.com`)
    - **Client Secret** (random string)
+7. **Copy both values** - you'll need them in the next step
+8. Optionally, click **"Download JSON"** to save them locally
 
 ---
 
-## 🎫 Step 3: Get Refresh Token
+## 🎫 Step 3: Generate Lifetime Refresh Token
 
-We'll use a Python script to get your refresh token.
+Now we'll generate your refresh token using the provided script.
 
 ### 3.1 Install Required Package
 ```bash
 pip install google-auth-oauthlib
 ```
 
-### 3.2 Create Token Generator Script
+### 3.2 Edit the Token Generator Script
 
-Create a file `get_gmail_token.py`:
+1. **Navigate to the `naukri/` folder**:
+   ```bash
+   cd naukri
+   ```
 
-```python
-from google_auth_oauthlib.flow import InstalledAppFlow
+2. **Open `get_gmail_token.py`** in your editor
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+3. **Find this section** (around line 30-38):
+   ```python
+   client_config = {
+       "installed": {
+           "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+           "client_secret": "YOUR_CLIENT_SECRET",
+           ...
+       }
+   }
+   ```
 
-def get_refresh_token():
-    # Replace these with YOUR credentials from Step 2
-    client_config = {
-        "installed": {
-            "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
-            "client_secret": "YOUR_CLIENT_SECRET",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": ["http://localhost"]
-        }
-    }
-    
-    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    creds = flow.run_local_server(port=0)
-    
-    print("\n" + "="*50)
-    print("✅ SUCCESS! Your Gmail API credentials:")
-    print("="*50)
-    print(f"\nRefresh Token:\n{creds.refresh_token}")
-    print(f"\nClient ID:\n{creds.client_id}")
-    print(f"\nClient Secret:\n{creds.client_secret}")
-    print("\n" + "="*50)
-    print("\n💾 SAVE THESE! You'll need them for GitHub Secrets")
-    print("="*50 + "\n")
+4. **Replace the placeholders**:
+   - Replace `YOUR_CLIENT_ID` with your actual Client ID from Step 2.4
+   - Replace `YOUR_CLIENT_SECRET` with your actual Client Secret from Step 2.4
 
-if __name__ == '__main__':
-    get_refresh_token()
-```
+### 3.3 Run the Script
 
-### 3.3 Edit and Run the Script
-
-1. **Open `get_gmail_token.py`**
-2. **Replace** `YOUR_CLIENT_ID` and `YOUR_CLIENT_SECRET` with values from Step 2.2
-3. **Run**:
+1. **Execute the script**:
    ```bash
    python3 get_gmail_token.py
    ```
 
-4. **Browser will open**:
+2. **Read the important reminder** about publishing your app (if you haven't already)
+
+3. **Press Enter** to continue
+
+4. **Browser will automatically open**:
    - Select your Gmail account
-   - Click **"Continue"** (ignore the "not verified" warning - it's your own app!)
-   - Click **"Continue"** again to grant permissions
-   - Browser will show "The authentication flow has completed"
+   - You may see **"Google hasn't verified this app"** warning:
+     - This is normal for personal projects
+     - Click **"Advanced"**
+     - Click **"Go to [your app name] (unsafe)"**
+     - It's safe because it's YOUR app!
+   - Click **"Continue"** to grant read-only Gmail access
+   - Browser will show: "The authentication flow has completed"
 
-5. **Copy the output** - you'll see:
-   - ✅ Refresh Token (long string)
-   - ✅ Client ID
-   - ✅ Client Secret
+5. **Copy the credentials from terminal**:
+   ```
+   ✅ SUCCESS! Your Gmail API Credentials:
+   ====================================
+   
+   1️⃣  GMAIL_CLIENT_ID:
+      xxxxx.apps.googleusercontent.com
+   
+   2️⃣  GMAIL_CLIENT_SECRET:
+      xxxxxxxxxxxxx
+   
+   3️⃣  GMAIL_REFRESH_TOKEN:
+      1//xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
 
-**SAVE THESE SECURELY!**
+6. **Optional**: The script will ask if you want to save to a file
+   - Type `yes` only if you need a local backup
+   - ⚠️ **DELETE** `gmail_credentials.txt` immediately after copying to GitHub Secrets!
+   - The file is automatically gitignored for safety
+
+**💾 SAVE THESE 3 VALUES SECURELY! You'll add them to GitHub in the next step.**
 
 ---
 
 ## 🔐 Step 4: Add Secrets to GitHub
 
-1. Go to your GitHub repository: https://github.com/itsashutosh07/profile-update-bots
+Now we'll securely store your credentials in GitHub Secrets (encrypted storage).
 
-2. Click **"Settings"** → **"Secrets and variables"** → **"Actions"**
+### 4.1 Navigate to Repository Secrets
 
-3. Click **"New repository secret"** and add these **3 secrets**:
+1. Go to your forked/cloned repository on GitHub
+   - Example: `https://github.com/YOUR_USERNAME/profile-update-bot`
+2. Click **"Settings"** tab (top navigation)
+3. Click **"Secrets and variables"** → **"Actions"** (left sidebar)
 
-### Secret 1: GMAIL_CLIENT_ID
-- **Name**: `GMAIL_CLIENT_ID`
-- **Value**: `xxxxx.apps.googleusercontent.com` (from Step 3.3)
+### 4.2 Add the 3 Gmail Secrets
+
+Click **"New repository secret"** for each of these:
+
+#### Secret 1: GMAIL_CLIENT_ID
+- **Name**: `GMAIL_CLIENT_ID` (must be exact, case-sensitive)
+- **Value**: Paste your Client ID from Step 3.3
+  - Format: `xxxxx.apps.googleusercontent.com`
 - Click **"Add secret"**
 
-### Secret 2: GMAIL_CLIENT_SECRET
-- **Name**: `GMAIL_CLIENT_SECRET`
-- **Value**: Your client secret (from Step 3.3)
+#### Secret 2: GMAIL_CLIENT_SECRET
+- **Name**: `GMAIL_CLIENT_SECRET` (must be exact, case-sensitive)
+- **Value**: Paste your Client Secret from Step 3.3
+  - Format: Random alphanumeric string
 - Click **"Add secret"**
 
-### Secret 3: GMAIL_REFRESH_TOKEN
-- **Name**: `GMAIL_REFRESH_TOKEN`
-- **Value**: Your refresh token (from Step 3.3)
+#### Secret 3: GMAIL_REFRESH_TOKEN
+- **Name**: `GMAIL_REFRESH_TOKEN` (must be exact, case-sensitive)
+- **Value**: Paste your Refresh Token from Step 3.3
+  - Format: `1//xxxxxxxxxxxxxxxxxxxxx` (long string)
 - Click **"Add secret"**
+
+**🔒 Security Notes:**
+- Secrets are encrypted by GitHub
+- They're never visible in logs or output
+- Only the workflow can access them
+- You can update them anytime if compromised
 
 ---
 
 ## ✅ Step 5: Verify Setup
 
 You should now have **5 secrets** in total:
-- ✅ `NAUKRI_EMAIL`
-- ✅ `NAUKRI_PASSWORD`
-- ✅ `GMAIL_CLIENT_ID` (NEW)
-- ✅ `GMAIL_CLIENT_SECRET` (NEW)
-- ✅ `GMAIL_REFRESH_TOKEN` (NEW)
+- ✅ `NAUKRI_EMAIL` (your Naukri login email)
+- ✅ `NAUKRI_PASSWORD` (your Naukri password)
+- ✅ `GMAIL_CLIENT_ID` ← NEW
+- ✅ `GMAIL_CLIENT_SECRET` ← NEW
+- ✅ `GMAIL_REFRESH_TOKEN` ← NEW
+
+All secret names must be **EXACTLY** as shown (case-sensitive).
 
 ---
 
@@ -223,32 +308,84 @@ You should see:
 - Make sure you added your email as a test user in Step 2.1 (step 7)
 - The OAuth consent screen must be configured correctly
 
-### Token Expired
-- Refresh tokens don't expire unless:
-  - You revoke access
-  - You don't use it for 6 months
-- If it expires, just re-run Step 3 to get a new one
+### Token Expired Error
+
+If you see `invalid_grant: Token has been expired or revoked`:
+
+**Most Common Cause:** Your app is still in "Testing" mode
+- **Solution:** Go back to Step 2.2 and publish your app
+- Testing mode tokens expire after 7 days
+- Published app tokens **last forever**
+
+**Other Causes:**
+- You manually revoked access at https://myaccount.google.com/permissions
+- Token hasn't been used in 6+ months (rare, only for testing mode)
+- Solution: Re-run Step 3 to generate a new token (after publishing!)
 
 ---
 
 ## 🔒 Security Notes
 
-1. ✅ **Refresh tokens are secure** - They only give read-only access to Gmail
-2. ✅ **GitHub Secrets are encrypted** - They're never visible in logs
-3. ✅ **Only you can access** - The app is in "Testing" mode with only your email as test user
-4. ⚠️ **Never share** your Client Secret or Refresh Token
-5. ⚠️ **Revoke access anytime** at: https://myaccount.google.com/permissions
+### What Access Does the Bot Have?
+1. ✅ **Read-only Gmail access** - Cannot send, delete, or modify emails
+2. ✅ **Scoped to specific API** - Only uses `gmail.readonly` scope
+3. ✅ **GitHub Secrets are encrypted** - Never visible in logs or code
+4. ✅ **No public exposure** - Publishing doesn't make your app "public"
+5. ✅ **Only you control access** - Credentials stored securely in your GitHub account
+
+### Is Publishing the App Safe?
+**Yes! Here's why:**
+
+- 🔒 **Not publicly listed**: Publishing doesn't create a public website or app store entry
+- 🔒 **Private credentials**: Your Client ID + Secret + Refresh Token remain in GitHub Secrets
+- 🔒 **No data sharing**: Only YOU can use these credentials
+- 🔒 **Revocable anytime**: Disconnect at https://myaccount.google.com/permissions
+- 🔒 **Read-only**: Bot can only read emails, not modify or delete them
+
+**What "Published" actually means:**
+- ❌ Does NOT mean: App is available to the public
+- ✅ Actually means: Tokens don't expire after 7 days
+- It's just Google's way of saying "production mode" vs "testing mode"
+
+### Best Practices
+1. ⚠️ **Never commit** `gmail_credentials.txt` to Git (already in `.gitignore`)
+2. ⚠️ **Never share** your Client Secret or Refresh Token publicly
+3. ✅ **Delete local files** after copying to GitHub Secrets
+4. ✅ **Check secret names** are exact (case-sensitive)
+5. ✅ **Publish your app** to avoid 7-day token expiration
+6. ✅ **Monitor bot logs** regularly for any issues
+
+### Revoking Access
+If you ever want to revoke the bot's access:
+1. Go to: https://myaccount.google.com/permissions
+2. Find your app (e.g., "Naukri Profile Bot")
+3. Click "Remove Access"
+4. Delete the GitHub Secrets if you're done using the bot
 
 ---
 
 ## 🎉 You're Done!
 
-Your bot can now:
-- ✅ Automatically read OTP from Gmail
-- ✅ Enter it on Naukri
-- ✅ Update your profile every 2 hours
+Your bot is now fully configured and can run **indefinitely**! 🚀
 
-No more manual OTP entry needed! 🚀
+✅ **Automatic OTP reading** from Gmail  
+✅ **Lifetime tokens** (published app = no expiration)  
+✅ **Scheduled updates** (5 times daily)  
+✅ **No manual intervention** needed  
+✅ **Secure credentials** in GitHub Secrets  
+
+### What Happens Next?
+
+The bot will automatically:
+1. Run at scheduled times (5 AM, 8:30 AM, 11 AM, 2 PM, 5 PM IST)
+2. Log in to Naukri
+3. Request OTP
+4. Read OTP from your Gmail (within 60 seconds)
+5. Enter OTP and complete login
+6. Update your profile headline
+7. Log success/failure
+
+**No more manual OTP entry needed!** Your profile stays active automatically.
 
 ---
 
