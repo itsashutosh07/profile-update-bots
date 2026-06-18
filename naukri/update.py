@@ -490,7 +490,7 @@ try:
     time.sleep(1)
     textarea.clear()
     updated_text = (
-        "Experienced Backend Software Engineer, Software Development, Backend Development, Microservices, Agile, Java, SpringBoot, Redis, Kafka, MySQL, Python,  Jenkins, Git, AWS, HTML, CSS, JS, Golang, Mongo, CI/CD, AI, MCP, RAG, Agentic AI, Databases, GenAI"
+        "Experienced Sr. Software Development Engineer. Expert in Backend Development, Microservices, Agile, Java, SpringBoot, Redis, Kafka, MySQL, Python, Jenkins, Git, AWS, HTML, CSS, JS, Golang, Mongo, CI/CD, AI, MCP, RAG, Agentic AI, Databases, GenAI"
     )
     textarea.send_keys(updated_text)
     print("[✓] Text updated")
