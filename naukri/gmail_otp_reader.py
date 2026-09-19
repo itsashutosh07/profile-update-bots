@@ -65,15 +65,25 @@ class GmailOTPReader:
         
         while time.time() - start_time < max_wait_seconds:
             try:
-                # Search for recent emails from Naukri
-                query = f'from:@{sender_filter} newer_than:2m'
+                # Search for recent emails from Naukri (wider window for CI delays)
+                query = f'from:@{sender_filter} newer_than:5m'
                 results = self.service.users().messages().list(
                     userId='me',
                     q=query,
-                    maxResults=5
+                    maxResults=10
                 ).execute()
                 
                 messages = results.get('messages', [])
+                
+                if not messages:
+                    # Fallback: broader search (sender domain in subject/body sometimes differs)
+                    alt_query = f'(from:@{sender_filter} OR from:naukri OR subject:OTP) newer_than:10m'
+                    results = self.service.users().messages().list(
+                        userId='me',
+                        q=alt_query,
+                        maxResults=10
+                    ).execute()
+                    messages = results.get('messages', [])
                 
                 if not messages:
                     print("[Gmail] No new messages yet, waiting...")
@@ -89,11 +99,12 @@ class GmailOTPReader:
                         format='full'
                     ).execute()
                     
-                    # Get email body
+                    # Get email body + snippet
                     body = self._get_email_body(msg)
+                    snippet = msg.get('snippet', '')
                     
                     # Extract OTP using regex patterns
-                    otp = self._extract_otp(body)
+                    otp = self._extract_otp(body) or self._extract_otp(snippet)
                     
                     if otp:
                         print(f"[Gmail] ✓ Found OTP: {otp}")

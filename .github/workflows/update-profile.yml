@@ -23,7 +23,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.11'
     
     - name: Install Chrome
       run: |
@@ -89,12 +89,13 @@ jobs:
               echo "🕒 Rate limited - will retry on next schedule"
               echo "This is expected behavior, not a failure"
               ;;
-            "FAILURE")
-              echo "❌ Update failed - check logs for details"
+            "FAILURE"|"OTP_FAILED"|"LOGIN_FAILED")
+              echo "❌ Update failed ($STATUS) - check logs for details"
               exit 1
               ;;
             *)
               echo "⚠️ Unknown status: $STATUS"
+              exit 1
               ;;
           esac
         else
