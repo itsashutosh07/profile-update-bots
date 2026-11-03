@@ -14,6 +14,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from gmail_otp_reader import get_otp_from_gmail
@@ -279,7 +280,7 @@ def set_otp_digit(element, digit):
 
 
 def enter_otp_code(otp_inputs, otp_code):
-    """Type OTP into Naukri single- or multi-box fields."""
+    """Type OTP into Naukri single- or multi-box fields (one digit per box)."""
     if len(otp_inputs) >= 6 and len(otp_code) == 6:
         print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
         for i, digit in enumerate(otp_code):
@@ -305,6 +306,39 @@ def enter_otp_code(otp_inputs, otp_code):
         raise Exception("No OTP input fields found to enter code")
 
 
+def enter_otp_via_paste(otp_inputs, otp_code):
+    """Paste full OTP into the first box (works on many React OTP widgets)."""
+    if not otp_inputs or len(otp_code) != 6:
+        enter_otp_code(otp_inputs, otp_code)
+        return
+    print("[OTP] Entering OTP via paste into first field...")
+    clear_otp_inputs(otp_inputs)
+    first = otp_inputs[0]
+    first.click()
+    time.sleep(0.3)
+    ActionChains(driver).click(first).send_keys(otp_code).perform()
+    time.sleep(0.5)
+
+
+def otp_fields_contain_code(otp_inputs, otp_code):
+    """Best-effort check that OTP boxes hold the expected digits."""
+    if len(otp_inputs) < 6 or len(otp_code) != 6:
+        return False
+    try:
+        values = []
+        for el in otp_inputs[:6]:
+            val = (el.get_attribute("value") or "").strip()
+            if not val and driver.execute_script("return arguments[0].value;", el):
+                val = str(driver.execute_script("return arguments[0].value;", el)).strip()
+            values.append(val)
+        combined = "".join(values)
+        if combined == otp_code:
+            return True
+        return all(values[i] == otp_code[i] for i in range(6) if values[i])
+    except Exception:
+        return False
+
+
 def clear_otp_inputs(otp_inputs):
     for el in otp_inputs:
         try:
@@ -327,7 +361,7 @@ def click_otp_verify_button():
 
     for selector in verify_selectors:
         try:
-            verify_btn = WebDriverWait(driver, 5).until(
+            verify_btn = WebDriverWait(driver, 8).until(
                 EC.element_to_be_clickable((By.XPATH, selector))
             )
             driver.execute_script(
@@ -417,91 +451,105 @@ def click_resend_otp_link():
     return False
 
 
+def submit_otp_for_verification(otp_code, entry_mode, screenshot_suffix):
+    """Enter OTP, click verify, return (logged_in, page_error_snippet)."""
+    otp_inputs = collect_visible_otp_inputs()
+    if not otp_inputs:
+        time.sleep(2)
+        otp_inputs = collect_visible_otp_inputs()
+    if not otp_inputs:
+        raise Exception("OTP inputs disappeared before entry")
+
+    if entry_mode == "paste":
+        enter_otp_via_paste(otp_inputs, otp_code)
+    else:
+        enter_otp_code(otp_inputs, otp_code)
+
+    otp_inputs = collect_visible_otp_inputs()
+    if otp_inputs and not otp_fields_contain_code(otp_inputs, otp_code):
+        print("[OTP] Fields missing digits after entry — retrying digit mode")
+        clear_otp_inputs(otp_inputs)
+        enter_otp_code(otp_inputs, otp_code)
+
+    driver.save_screenshot(os.path.join(log_dir, f"step_1_otp_entered_{screenshot_suffix}.png"))
+    if screenshot_suffix == "paste" or screenshot_suffix == "digits_1":
+        driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
+
+    time.sleep(2)
+    if not click_otp_verify_button():
+        print("[OTP] No verify button found - OTP might auto-submit")
+
+    if wait_until_logged_in_after_otp(timeout_seconds=45):
+        driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
+        return True, ""
+
+    page_text = driver.page_source.lower()
+    return False, otp_page_error_snippet(page_text)
+
+
 def run_otp_verification_flow(login_submit_epoch):
     """
-    Fetch Gmail OTP, enter, verify — with retry for transient Naukri errors.
-    Returns True when login proceeds past OTP.
+    Fetch Gmail OTP once for this login, then retry verify with alternate entry
+    methods. Naukri resend often does not create a new Gmail message.
     """
     driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
-
-    used_message_ids = set()
     min_received_after = login_submit_epoch - 30
+
+    print("[OTP] Fetching OTP from Gmail API...")
+    session_otp = get_otp_from_gmail(
+        sender_filter="naukri.com",
+        max_wait_seconds=90,
+        min_received_after=min_received_after,
+    )
+    if not session_otp:
+        raise Exception(
+            "Failed to retrieve OTP from Gmail for this login attempt "
+            "(check Gmail API credentials or inbox delivery)"
+        )
+
+    otp_code = session_otp["otp"]
+    print(
+        f"[OTP] ✓ Session OTP: {otp_code} "
+        f"(Gmail id {session_otp['message_id'][:10]}…, subject: {session_otp['subject']!r})"
+    )
+
+    entry_modes = ["paste", "digits", "digits"]
     last_page_error = ""
-    otp_code = None
 
-    for attempt in range(1, 3):
-        print(f"[OTP] Verification attempt {attempt}/2")
-        if attempt == 1:
-            print("[OTP] Fetching OTP from Gmail API...")
-        else:
-            print("[OTP] Fetching fresh OTP from Gmail after retry...")
-
-        otp_result = get_otp_from_gmail(
-            sender_filter="naukri.com",
-            max_wait_seconds=90 if attempt == 1 else 120,
-            min_received_after=min_received_after,
-            exclude_message_ids=used_message_ids,
-        )
-        if not otp_result:
-            raise Exception("Failed to retrieve OTP from Gmail - check Gmail API credentials")
-
-        used_message_ids.add(otp_result["message_id"])
-        otp_code = otp_result["otp"]
-        print(
-            f"[OTP] ✓ Received OTP: {otp_code} "
-            f"(Gmail id {otp_result['message_id'][:10]}…)"
-        )
-
-        otp_inputs = collect_visible_otp_inputs()
-        if not otp_inputs:
-            time.sleep(2)
-            otp_inputs = collect_visible_otp_inputs()
-        if not otp_inputs:
-            raise Exception("OTP inputs disappeared before entry")
-
-        enter_otp_code(otp_inputs, otp_code)
-        driver.save_screenshot(os.path.join(log_dir, f"step_1_otp_entered_attempt_{attempt}.png"))
-        if attempt == 1:
-            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
-
-        time.sleep(1)
-        if not click_otp_verify_button():
-            print("[OTP] No verify button found - OTP might auto-submit")
-
-        if wait_until_logged_in_after_otp(timeout_seconds=45):
-            driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
-            print("[✓] OTP verification completed successfully")
-            return True
-
-        driver.save_screenshot(os.path.join(log_dir, f"step_1_after_otp_attempt_{attempt}.png"))
-        page_text = driver.page_source.lower()
-        last_page_error = otp_page_error_snippet(page_text)
-        print(f"[DEBUG] URL after OTP: {driver.current_url}")
-        print(f"[DEBUG] Title after OTP: {driver.title}")
-        if last_page_error:
-            print(f"[OTP] Page error: {last_page_error}")
-
-        if is_invalid_otp_error(page_text):
-            raise Exception(f"OTP verification failed - invalid/expired OTP ({last_page_error})")
-
-        if attempt == 1 and is_transient_otp_error(page_text):
-            print("[OTP] Transient error — re-entering same OTP and retrying verify...")
+    for idx, mode in enumerate(entry_modes, start=1):
+        print(f"[OTP] Verify pass {idx}/{len(entry_modes)} (entry={mode})")
+        if idx > 1:
             otp_inputs = collect_visible_otp_inputs()
             if otp_inputs:
                 clear_otp_inputs(otp_inputs)
-                time.sleep(1)
-                enter_otp_code(otp_inputs, otp_code)
-                click_otp_verify_button()
-                if wait_until_logged_in_after_otp(timeout_seconds=30):
-                    driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
-                    print("[✓] OTP verification succeeded on immediate re-verify")
-                    return True
+            time.sleep(2)
 
-            print("[OTP] Re-verify failed — requesting resend and waiting for new email...")
-            resend_at = time.time()
-            click_resend_otp_link()
-            min_received_after = resend_at - 10
-            time.sleep(5)
+        try:
+            logged_in, page_error = submit_otp_for_verification(
+                otp_code, mode, f"{mode}_{idx}"
+            )
+        except Exception as entry_err:
+            print(f"[OTP] Entry error on pass {idx}: {entry_err}")
+            continue
+
+        if logged_in:
+            print("[✓] OTP verification completed successfully")
+            return True
+
+        last_page_error = page_error
+        print(f"[DEBUG] URL after OTP: {driver.current_url}")
+        if page_error:
+            print(f"[OTP] Page error: {page_error}")
+
+        page_text = driver.page_source.lower()
+        driver.save_screenshot(os.path.join(log_dir, f"step_1_after_otp_pass_{idx}.png"))
+
+        if is_invalid_otp_error(page_text):
+            raise Exception(f"OTP verification failed - invalid/expired OTP ({page_error})")
+
+        if is_transient_otp_error(page_text):
+            print("[OTP] Transient Naukri error — will retry with alternate OTP entry")
+            time.sleep(3)
             continue
 
         break

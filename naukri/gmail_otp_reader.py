@@ -2,6 +2,7 @@ import os
 import re
 import time
 import base64
+from datetime import datetime, timezone
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -47,12 +48,24 @@ class GmailOTPReader:
         self.service = build("gmail", "v1", credentials=self.creds)
         print("[Gmail] Successfully connected to Gmail API")
 
+    @staticmethod
+    def _gmail_after_clause(min_received_after):
+        """
+        Gmail search uses after:YYYY/MM/DD (not Unix timestamps).
+        We still filter precisely with internalDate in code.
+        """
+        if not min_received_after:
+            return ""
+        dt = datetime.fromtimestamp(min_received_after, tz=timezone.utc)
+        return f" after:{dt.year}/{dt.month:02d}/{dt.day:02d}"
+
     def get_latest_otp(
         self,
         sender_filter="naukri.com",
         max_wait_seconds=60,
         min_received_after=None,
         exclude_message_ids=None,
+        require_internal_date_after_ms=None,
     ):
         """
         Fetch the newest OTP from Gmail for the current login attempt.
@@ -62,6 +75,8 @@ class GmailOTPReader:
             max_wait_seconds: Maximum time to wait for OTP email
             min_received_after: Unix epoch seconds; ignore older messages
             exclude_message_ids: Message IDs already used this run
+            require_internal_date_after_ms: If set, only accept messages newer than this
+                (used when waiting for a post-resend email). When none arrive, return None.
 
         Returns:
             dict with keys otp, message_id, subject, internal_date_ms — or None
@@ -72,21 +87,23 @@ class GmailOTPReader:
                 f"[Gmail] Only considering emails after "
                 f"{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(min_received_after))}"
             )
+        if require_internal_date_after_ms:
+            print(
+                f"[Gmail] Requiring message newer than "
+                f"{datetime.fromtimestamp(require_internal_date_after_ms / 1000, tz=timezone.utc).isoformat()}"
+            )
 
         exclude_message_ids = set(exclude_message_ids or [])
         start_time = time.time()
+        after_clause = self._gmail_after_clause(min_received_after)
 
         while time.time() - start_time < max_wait_seconds:
             try:
-                after_clause = ""
-                if min_received_after:
-                    after_clause = f" after:{int(min_received_after)}"
-
                 queries = [
-                    f"from:@{sender_filter} subject:OTP{after_clause}",
                     f"from:info@naukri.com subject:OTP{after_clause}",
-                    f"(from:@{sender_filter} OR from:naukri) subject:OTP{after_clause}",
-                    f"from:@{sender_filter}{after_clause}",
+                    f"from:@{sender_filter} subject:OTP{after_clause}",
+                    f"(from:@{sender_filter} OR from:naukri OR from:info@naukri.com) subject:OTP newer_than:2d",
+                    f"from:info@naukri.com newer_than:2d",
                 ]
 
                 messages = []
@@ -126,6 +143,11 @@ class GmailOTPReader:
 
                     internal_date_ms = int(msg.get("internalDate", 0))
                     if min_received_after and internal_date_ms / 1000.0 < min_received_after - 5:
+                        continue
+                    if (
+                        require_internal_date_after_ms
+                        and internal_date_ms <= require_internal_date_after_ms
+                    ):
                         continue
 
                     subject = self._header_value(msg, "Subject")
@@ -248,6 +270,7 @@ def get_otp_from_gmail(
     max_wait_seconds=60,
     min_received_after=None,
     exclude_message_ids=None,
+    require_internal_date_after_ms=None,
 ):
     """
     Convenience function to get OTP from Gmail.
@@ -262,6 +285,7 @@ def get_otp_from_gmail(
             max_wait_seconds=max_wait_seconds,
             min_received_after=min_received_after,
             exclude_message_ids=exclude_message_ids,
+            require_internal_date_after_ms=require_internal_date_after_ms,
         )
     except Exception as e:
         print(f"[Gmail] Failed to get OTP: {str(e)}")
