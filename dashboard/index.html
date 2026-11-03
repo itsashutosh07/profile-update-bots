@@ -735,11 +735,11 @@
         <!-- Stats Section -->
         <div class="stats" id="stats">
             <div class="stat-card">
-                <div class="stat-label">Total Runs</div>
+                <div class="stat-label" title="Last 30 Naukri workflow runs from GitHub">Runs (last 30)</div>
                 <div class="stat-value" id="totalRuns">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Success Rate</div>
+                <div class="stat-label" title="Runs with confirmed profile update ÷ runs shown">Verified success</div>
                 <div class="stat-value success-rate" id="successRate">-</div>
             </div>
             <div class="stat-card">
@@ -796,7 +796,9 @@
         // Configuration - Update these values
         const GITHUB_OWNER = 'itsashutosh07';
         const GITHUB_REPO = 'profile-update-bots';
-        const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs?per_page=30`;
+        const NAUKRI_WORKFLOW_FILE = 'update-profile.yml';
+        // Workflow-scoped runs so deploy/other workflows do not consume per_page slots
+        const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${NAUKRI_WORKFLOW_FILE}/runs?per_page=30`;
 
         // Cache for job details to avoid repeated API calls
         const jobDetailsCache = new Map();
@@ -1364,32 +1366,59 @@
             }
         }
 
-        // Calculate statistics (profile updated = SUCCESS marker, not raw GitHub conclusion)
+        // Bucket each run for header stats (every run lands in exactly one category)
+        function bucketRunForStats(run) {
+            const bot = run.botStatus;
+            if (bot === 'SUCCESS') return 'verifiedSuccess';
+            if (bot === 'CAPTCHA_BLOCKED') return 'captcha';
+            if (bot === 'RATE_LIMITED') return 'rateLimited';
+            if (bot === 'FAILED') return 'failed';
+            if (run.conclusion === 'failure') return 'failed';
+            if (run.conclusion === 'success') {
+                // Green GitHub job without a profile marker (legacy run or not job-enriched yet)
+                return 'githubSuccess';
+            }
+            return 'other';
+        }
+
+        // Calculate statistics (verified profile update = SUCCESS marker; githubSuccess = workflow green only)
         function calculateStats(runs) {
             const total = runs.length;
-            let profileSuccess = 0;
+            let verifiedSuccess = 0;
+            let githubSuccess = 0;
             let failed = 0;
             let captcha = 0;
             let rateLimited = 0;
+            let other = 0;
 
             runs.forEach((run) => {
-                const bot = run.botStatus;
-                if (bot === 'SUCCESS') profileSuccess += 1;
-                else if (bot === 'CAPTCHA_BLOCKED') captcha += 1;
-                else if (bot === 'RATE_LIMITED') rateLimited += 1;
-                else if (bot === 'FAILED') failed += 1;
-                else if (run.conclusion === 'failure') failed += 1;
-                // GitHub "success" without a bot marker (CAPTCHA/rate limit/profile) is not a profile update
+                const bucket = bucketRunForStats(run);
+                if (bucket === 'verifiedSuccess') verifiedSuccess += 1;
+                else if (bucket === 'githubSuccess') githubSuccess += 1;
+                else if (bucket === 'failed') failed += 1;
+                else if (bucket === 'captcha') captcha += 1;
+                else if (bucket === 'rateLimited') rateLimited += 1;
+                else other += 1;
             });
 
-            const successRate = total > 0 ? Math.round((profileSuccess / total) * 100) : 0;
+            const successRate = total > 0 ? Math.round((verifiedSuccess / total) * 100) : 0;
             const lastRun = runs[0];
             let lastStatus = 'N/A';
             if (lastRun) {
                 lastStatus = getRunDisplayBadge(lastRun).statusText;
             }
 
-            return { total, profileSuccess, failed, captcha, rateLimited, successRate, lastStatus };
+            return {
+                total,
+                profileSuccess: verifiedSuccess,
+                githubSuccess,
+                failed,
+                captcha,
+                rateLimited,
+                other,
+                successRate,
+                lastStatus,
+            };
         }
 
         // Update stats display
@@ -1399,7 +1428,10 @@
             document.getElementById('successRate').textContent = `${stats.successRate}%`;
             document.getElementById('lastRun').textContent = stats.lastStatus;
 
-            let breakdownHTML = `<span class="status-pill">✅ ${stats.profileSuccess}</span>`;
+            let breakdownHTML = `<span class="status-pill" title="Profile updated (marker step ran)">✅ ${stats.profileSuccess}</span>`;
+            if (stats.githubSuccess > 0) {
+                breakdownHTML += `<span class="status-pill other" title="GitHub job succeeded; profile marker not confirmed (often older runs or not yet loaded)">📋 ${stats.githubSuccess}</span>`;
+            }
             if (stats.failed > 0) {
                 breakdownHTML += `<span class="status-pill failure">❌ ${stats.failed}</span>`;
             }
@@ -1408,6 +1440,9 @@
             }
             if (stats.rateLimited > 0) {
                 breakdownHTML += `<span class="status-pill other">🕒 ${stats.rateLimited}</span>`;
+            }
+            if (stats.other > 0) {
+                breakdownHTML += `<span class="status-pill other" title="Cancelled, in progress, or unknown">❓ ${stats.other}</span>`;
             }
             document.getElementById('statusBreakdown').innerHTML = breakdownHTML;
         }
@@ -1490,16 +1525,13 @@
                 const data = await response.json();
                 let runs = data.workflow_runs || [];
 
-                // Filter to only show "Update Naukri Profile" workflow runs
                 runs = runs.filter(run => run.name === 'Update Naukri Profile');
 
                 if (runs.length === 0) {
-                    const allRunNames = data.workflow_runs.map(r => r.name).join(', ');
                     contentDiv.innerHTML = `
                         <div class="empty-state">
                             <h3>No "Update Naukri Profile" runs found</h3>
-                            <p>Looking for workflow runs with name "Update Naukri Profile".</p>
-                            ${data.workflow_runs.length > 0 ? `<p style="margin-top: 10px; font-size: 0.9rem; color: #9ca3af;">Found ${data.workflow_runs.length} other workflow(s): ${allRunNames}</p>` : ''}
+                            <p>Workflow file: ${NAUKRI_WORKFLOW_FILE}</p>
                             <p style="margin-top: 15px;">Runs will appear here once the workflow executes.</p>
                         </div>
                     `;
