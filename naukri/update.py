@@ -52,7 +52,7 @@ os.makedirs(log_dir, exist_ok=True)
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
-BOT_SCRIPT_VERSION = "2026-11-04-otp-react-xvfb"
+BOT_SCRIPT_VERSION = "2026-11-04-captcha-status-codes"
 
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
 print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
@@ -96,8 +96,11 @@ USER_AGENT = build_chrome_user_agent()
 # Function to write status summary for dashboard
 def write_status_summary(status, message, details=None):
     """
-    Write a status summary file that can be read by the dashboard
-    Status can be: SUCCESS, RATE_LIMITED, FAILURE, OTP_FAILED, LOGIN_FAILED
+    Write a status summary file that can be read by the dashboard.
+
+    Status values include:
+    SUCCESS, RATE_LIMITED, CAPTCHA_BLOCKED, OTP_GMAIL_TIMEOUT, OTP_VERIFY_FAILED,
+    OTP_FAILED, LOGIN_FAILED, FAILURE
     """
     status_data = {
         "status": status,
@@ -115,6 +118,26 @@ def write_status_summary(status, message, details=None):
         print(f"[WARN] Could not write status file: {e}")
 
 
+class BotFlowError(Exception):
+    """Structured failure with status code for run_status.json and CI logs."""
+
+    def __init__(self, status, message, details=None):
+        self.status = status
+        self.message = message
+        self.details = details or {}
+        super().__init__(message)
+
+
+class GmailOTPTimeoutError(BotFlowError):
+    def __init__(self, message, details=None):
+        super().__init__("OTP_GMAIL_TIMEOUT", message, details)
+
+
+class OTPVerifyFailedError(BotFlowError):
+    def __init__(self, message, details=None):
+        super().__init__("OTP_VERIFY_FAILED", message, details)
+
+
 def fail_and_exit(status, message, details=None):
     """Write status, screenshot if possible, and exit with failure."""
     try:
@@ -122,12 +145,118 @@ def fail_and_exit(status, message, details=None):
     except Exception:
         pass
     write_status_summary(status=status, message=message, details=details or {})
+    print("=" * 72)
     print(f"[ERROR] {status}: {message}")
+    if details:
+        for key, value in details.items():
+            print(f"[ERROR]   {key}: {value}")
+    print("=" * 72)
     try:
         driver.quit()
     except Exception:
         pass
     sys.exit(1)
+
+
+def exit_gracefully(status, message, details=None, screenshot_basename=None):
+    """Expected non-success outcomes (rate limit, CAPTCHA) — exit 0 with clear status."""
+    try:
+        name = screenshot_basename or status.lower()
+        driver.save_screenshot(os.path.join(log_dir, f"{name}.png"))
+    except Exception:
+        pass
+    write_status_summary(status=status, message=message, details=details or {})
+    print("=" * 72)
+    print(f"[INFO] {status}: {message}")
+    if details:
+        for key, value in details.items():
+            print(f"[INFO]   {key}: {value}")
+    print("=" * 72)
+    try:
+        driver.quit()
+    except Exception:
+        pass
+    sys.exit(0)
+
+
+CAPTCHA_PAGE_MARKERS = (
+    "select all images that contain",
+    "select all squares",
+    "select all images",
+    "recaptcha",
+    "g-recaptcha",
+    "hcaptcha",
+    "h-captcha",
+    "captcha",
+    "challenge-form",
+    "verify you're human",
+    "unusual traffic",
+    "bot protection",
+)
+
+
+def detect_captcha_challenge(page_source=None):
+    """
+    Return a short label if Naukri / Google image CAPTCHA is visible, else None.
+    Does not attempt to solve the challenge.
+    """
+    try:
+        page = (page_source or driver.page_source or "").lower()
+    except Exception:
+        page = ""
+
+    for marker in CAPTCHA_PAGE_MARKERS:
+        if marker in page:
+            return marker
+
+    try:
+        for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
+            src = (iframe.get_attribute("src") or "").lower()
+            title = (iframe.get_attribute("title") or "").lower()
+            if any(token in src for token in ("recaptcha", "hcaptcha", "captcha", "challenge")):
+                return f"captcha iframe ({src[:96]})"
+            if "recaptcha" in title or "captcha" in title:
+                return "captcha iframe (title)"
+    except Exception:
+        pass
+
+    try:
+        captcha_xpaths = [
+            "//*[contains(translate(., 'SELECT ALL IMAGES', 'select all images'), 'select all images')]",
+            "//*[contains(translate(., 'SELECT ALL SQUARES', 'select all squares'), 'select all squares')]",
+            "//div[contains(@class, 'recaptcha')]",
+            "//iframe[contains(@src, 'recaptcha') or contains(@src, 'hcaptcha')]",
+        ]
+        for xpath in captcha_xpaths:
+            for el in driver.find_elements(By.XPATH, xpath):
+                if el.is_displayed():
+                    return "visible captcha challenge UI"
+    except Exception:
+        pass
+
+    return None
+
+
+def check_and_exit_if_captcha(context_label):
+    """Stop the run with CAPTCHA_BLOCKED when bot protection is shown."""
+    marker = detect_captcha_challenge()
+    if not marker:
+        return False
+    print(f"[CAPTCHA] 🛡️  Bot protection CAPTCHA detected during: {context_label}")
+    print(f"[CAPTCHA] Indicator: {marker}")
+    print("[CAPTCHA] Automated login cannot continue (CAPTCHA will not be solved by this bot).")
+    exit_gracefully(
+        "CAPTCHA_BLOCKED",
+        "Naukri showed a CAPTCHA challenge. Retry on the next scheduled run or log in manually once in a browser.",
+        {
+            "context": context_label,
+            "detected": marker,
+            "expected": True,
+            "action": "retry on next schedule or manual login",
+        },
+        screenshot_basename="step_captcha_detected",
+    )
+    return True
 
 
 def is_otp_page():
@@ -175,6 +304,8 @@ def ensure_login_page(max_attempts=3):
         print(f"[DEBUG] URL: {driver.current_url}")
         print(f"[DEBUG] Title: {driver.title}")
         driver.save_screenshot(os.path.join(log_dir, f"step_1_login_attempt_{attempt}.png"))
+
+        check_and_exit_if_captcha(f"loading login page (attempt {attempt})")
 
         if is_login_form_visible():
             print("[✓] Login form is visible")
@@ -569,6 +700,8 @@ def run_otp_verification_flow(login_submit_epoch):
     Fetch Gmail OTP once for this login, then retry verify with alternate entry
     methods. Naukri resend often does not create a new Gmail message.
     """
+    check_and_exit_if_captcha("before OTP / Gmail step")
+
     driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
 
     print("[OTP] Fetching OTP from Gmail API (email must arrive after login submit)...")
@@ -580,9 +713,18 @@ def run_otp_verification_flow(login_submit_epoch):
         require_internal_date_after_ms=login_cutoff_ms - 2000,
     )
     if not session_otp:
-        raise Exception(
-            "Failed to retrieve OTP from Gmail for this login attempt "
-            "(check Gmail API credentials or inbox delivery)"
+        check_and_exit_if_captcha("while waiting for Naukri OTP email")
+        raise GmailOTPTimeoutError(
+            "No Naukri OTP email arrived within 90s after login submit for this attempt. "
+            "This is usually delivery timing or login blocked (CAPTCHA), not invalid Gmail API credentials.",
+            {
+                "url": driver.current_url,
+                "title": driver.title,
+                "gmail_otp_received": False,
+                "login_submit_utc": time.strftime(
+                    "%Y-%m-%d %H:%M:%S UTC", time.gmtime(login_submit_epoch)
+                ),
+            },
         )
 
     otp_code = session_otp["otp"]
@@ -590,12 +732,20 @@ def run_otp_verification_flow(login_submit_epoch):
         f"[OTP] ✓ Session OTP: {otp_code} "
         f"(Gmail id {session_otp['message_id'][:10]}…, subject: {session_otp['subject']!r})"
     )
+    otp_context = {
+        "gmail_otp_received": True,
+        "gmail_message_id": session_otp["message_id"],
+        "gmail_subject": session_otp.get("subject"),
+        "url": driver.current_url,
+    }
 
     entry_modes = ["digits", "cdp", "paste"]
     last_page_error = ""
 
     for idx, mode in enumerate(entry_modes, start=1):
         print(f"[OTP] Verify pass {idx}/{len(entry_modes)} (entry={mode})")
+        check_and_exit_if_captcha(f"OTP verify pass {idx}")
+
         if idx > 1:
             otp_inputs = collect_visible_otp_inputs()
             if otp_inputs:
@@ -623,7 +773,10 @@ def run_otp_verification_flow(login_submit_epoch):
         driver.save_screenshot(os.path.join(log_dir, f"step_1_after_otp_pass_{idx}.png"))
 
         if is_invalid_otp_error(page_text):
-            raise Exception(f"OTP verification failed - invalid/expired OTP ({page_error})")
+            raise OTPVerifyFailedError(
+                f"OTP rejected by Naukri ({page_error or 'invalid/expired OTP'})",
+                {**otp_context, "page_error": page_error, "failure_phase": "otp_verify"},
+            )
 
         if is_transient_otp_error(page_text):
             print("[OTP] Transient Naukri error — will retry with alternate OTP entry")
@@ -634,7 +787,14 @@ def run_otp_verification_flow(login_submit_epoch):
 
     driver.save_screenshot(os.path.join(log_dir, "step_1_otp_verification_failed.png"))
     detail = last_page_error or "still on login/OTP page after submit"
-    raise Exception(f"OTP verification failed - {detail}")
+    raise OTPVerifyFailedError(
+        f"Gmail OTP was received but Naukri verification did not complete ({detail}).",
+        {
+            **otp_context,
+            "page_error": detail,
+            "failure_phase": "otp_verify",
+        },
+    )
 
 
 # Print ChromeDriver info only (skip broken chrome version detection on Windows)
@@ -727,6 +887,7 @@ try:
     time.sleep(8)
     print("[✓] Login button clicked")
     driver.save_screenshot(os.path.join(log_dir, "step_1_after_login_click.png"))
+    check_and_exit_if_captcha("after login submit")
     
     # Check if OTP is required
     try:
@@ -735,6 +896,7 @@ try:
         print(f"[DEBUG] Page title after login: {driver.title}")
         
         page_source = driver.page_source.lower()
+        check_and_exit_if_captcha("login flow before OTP detection")
         
         rate_limit_keywords = [
             'max limit to generate otp',
@@ -747,16 +909,16 @@ try:
         if any(keyword in page_source for keyword in rate_limit_keywords):
             print("[OTP] 🚫 RATE LIMITED!")
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_rate_limited.png"))
-            write_status_summary(
-                status="RATE_LIMITED",
-                message="Naukri rate limited OTP requests. Will retry in next scheduled run.",
-                details={"retry_in": "6 hours", "expected": True}
+            exit_gracefully(
+                "RATE_LIMITED",
+                "Naukri rate limited OTP requests. Will retry in next scheduled run.",
+                {"retry_in": "6 hours", "expected": True},
+                screenshot_basename="step_1_otp_rate_limited",
             )
-            print("[INFO] Exiting gracefully - will retry on next schedule")
-            driver.quit()
-            print("[INFO] Browser closed.")
-            sys.exit(0)
         
+        if detect_captcha_challenge(page_source):
+            check_and_exit_if_captcha("OTP detection (CAPTCHA blocking login flow)")
+
         has_otp_text = any(
             text in page_source
             for text in [
@@ -776,6 +938,7 @@ try:
             print("[OTP] OTP text found but inputs not detected yet, waiting for page to load...")
             time.sleep(5)
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_page_loading.png"))
+            check_and_exit_if_captcha("waiting for OTP input fields")
             try:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located(
@@ -787,26 +950,50 @@ try:
             otp_inputs = collect_visible_otp_inputs()
             otp_present = len(otp_inputs) >= 4
         
-        if otp_present or has_otp_text:
+        if otp_present:
+            if detect_captcha_challenge():
+                check_and_exit_if_captcha("OTP UI obscured by CAPTCHA")
             print("[OTP] ⚠️  OTP verification required!")
-            if otp_inputs:
-                print(f"[OTP] Found {len(otp_inputs)} visible OTP input fields")
+            print(f"[OTP] Found {len(otp_inputs)} visible OTP input fields")
             run_otp_verification_flow(login_submit_epoch)
+        elif has_otp_text:
+            check_and_exit_if_captcha("OTP text present but inputs missing")
+            raise GmailOTPTimeoutError(
+                "Naukri showed OTP messaging but OTP input fields never appeared (often CAPTCHA or a broken login step).",
+                {
+                    "url": driver.current_url,
+                    "title": driver.title,
+                    "gmail_otp_received": False,
+                    "failure_phase": "otp_ui_missing",
+                },
+            )
         else:
             print("[OTP] ℹ️  No OTP fields detected")
             url_l = driver.current_url.lower()
+            if detect_captcha_challenge():
+                check_and_exit_if_captcha("still on login page with CAPTCHA")
             if "mnjuser" in url_l and "login" not in url_l and "nlogin" not in url_l:
                 print("[OTP] ✅ No OTP required - already on authenticated mnjuser page")
             elif "login" in url_l or "nlogin" in url_l:
-                raise Exception("Still on login page after password submit and no OTP UI detected")
+                raise BotFlowError(
+                    "LOGIN_FAILED",
+                    "Still on login page after password submit (no OTP UI and not authenticated)",
+                    {"url": driver.current_url, "title": driver.title},
+                )
             else:
                 print("[OTP] ✅ No OTP required - login successful")
     
+    except BotFlowError as flow_err:
+        print(f"[FLOW] {flow_err.status}: {flow_err.message}")
+        driver.save_screenshot(os.path.join(log_dir, "step_1_otp_error.png"))
+        fail_and_exit(flow_err.status, flow_err.message, flow_err.details)
     except Exception as otp_error:
         print(f"[OTP] ❌ OTP handling error: {str(otp_error)}")
         print(f"[OTP] Traceback: {traceback.format_exc()}")
         driver.save_screenshot(os.path.join(log_dir, "step_1_otp_error.png"))
         page_text = driver.page_source.lower()
+        if detect_captcha_challenge(page_text):
+            check_and_exit_if_captcha("OTP exception handler")
         fail_and_exit(
             "OTP_FAILED",
             str(otp_error),
@@ -814,6 +1001,7 @@ try:
                 "url": driver.current_url,
                 "title": driver.title,
                 "page_error": otp_page_error_snippet(page_text),
+                "failure_phase": "otp_unknown",
             },
         )
     

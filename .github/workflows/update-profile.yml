@@ -91,6 +91,20 @@ jobs:
               echo "🕒 Rate limited - will retry on next schedule"
               echo "This is expected behavior, not a failure"
               ;;
+            "CAPTCHA_BLOCKED")
+              echo "🛡️ CAPTCHA blocked - Naukri bot protection (automated login paused)"
+              echo "This is expected occasionally; retry on next schedule or log in manually once"
+              ;;
+            "OTP_GMAIL_TIMEOUT")
+              echo "📭 No OTP email arrived for this login attempt (not a Gmail token/credentials error by default)"
+              echo "❌ Update failed ($STATUS) - check logs and screenshots"
+              exit 1
+              ;;
+            "OTP_VERIFY_FAILED")
+              echo "🔐 Gmail OTP was received but Naukri rejected verification (see page_error in status JSON)"
+              echo "❌ Update failed ($STATUS) - check logs and screenshots"
+              exit 1
+              ;;
             "FAILURE"|"OTP_FAILED"|"LOGIN_FAILED")
               echo "❌ Update failed ($STATUS) - check logs for details"
               exit 1
@@ -113,6 +127,12 @@ jobs:
       run: |
         echo "🕒 This run was rate limited by Naukri.com"
         echo "The dashboard will detect this step to show accurate status"
+
+    - name: Mark as CAPTCHA blocked
+      if: always() && env.BOT_STATUS == 'CAPTCHA_BLOCKED'
+      run: |
+        echo "🛡️ This run was blocked by Naukri CAPTCHA / bot protection"
+        echo "No CAPTCHA was solved; retry on the next schedule or after a manual browser login"
     
     - name: Upload screenshots as artifacts
       if: always()

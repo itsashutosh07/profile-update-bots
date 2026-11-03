@@ -186,6 +186,13 @@ class GmailOTPReader:
                     )
                     return best
 
+                if messages and not candidates:
+                    print(
+                        "[Gmail] Messages matched search but none passed time/OTP filters yet, waiting..."
+                    )
+                    time.sleep(5)
+                    continue
+
                 print("[Gmail] Messages found but no OTP extracted yet, waiting...")
                 time.sleep(5)
 
@@ -193,7 +200,7 @@ class GmailOTPReader:
                 print(f"[Gmail] Error reading emails: {str(e)}")
                 time.sleep(5)
 
-        print("[Gmail] ✗ Timeout waiting for OTP")
+        print("[Gmail] ✗ Timeout waiting for OTP (no qualifying Naukri OTP email for this login attempt)")
         return None
 
     @staticmethod
@@ -289,4 +296,6 @@ def get_otp_from_gmail(
         )
     except Exception as e:
         print(f"[Gmail] Failed to get OTP: {str(e)}")
+        if "Missing Gmail credentials" in str(e) or "invalid_grant" in str(e).lower():
+            print("[Gmail] This looks like a Gmail API credential/configuration problem.")
         return None
