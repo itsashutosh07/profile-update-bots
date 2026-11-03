@@ -122,6 +122,11 @@ jobs:
           fi
         fi
     
+    - name: Mark profile updated
+      if: always() && env.BOT_STATUS == 'SUCCESS'
+      run: |
+        echo "✅ Profile headline updated on Naukri.com (confirmed via run_status.json)"
+
     - name: Mark as Rate Limited
       if: always() && env.BOT_STATUS == 'RATE_LIMITED'
       run: |

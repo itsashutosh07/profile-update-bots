@@ -403,6 +403,19 @@
             background: #ef4444;
         }
 
+        .status-captcha,
+        .status-warning {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            text-transform: uppercase;
+        }
+
+        .status-captcha::before,
+        .status-warning::before {
+            background: #fbbf24;
+        }
+
         .status-in_progress {
             background: rgba(59, 130, 246, 0.15);
             color: #3b82f6;
@@ -910,73 +923,88 @@
             return null;
         }
 
+        // Resolve bot outcome from workflow marker steps (matches run_status.json)
+        function getJobSteps(jobs) {
+            const updateJob = jobs?.find(j => j.name === 'update');
+            return {
+                updateJob,
+                statusCheckStep: updateJob?.steps?.find(s => s.name === 'Check run status'),
+                updateStep: updateJob?.steps?.find(s => s.name === 'Run update script'),
+                profileUpdatedMarker: updateJob?.steps?.find(s => s.name === 'Mark profile updated'),
+                rateLimitMarker: updateJob?.steps?.find(s => s.name === 'Mark as Rate Limited'),
+                captchaMarker: updateJob?.steps?.find(s => s.name === 'Mark as CAPTCHA blocked'),
+            };
+        }
+
+        function stepRan(step) {
+            return step && step.conclusion === 'success';
+        }
+
+        function resolveBotStatusFromJobs(jobs) {
+            if (!jobs || jobs.length === 0) return null;
+            const steps = getJobSteps(jobs);
+            if (stepRan(steps.profileUpdatedMarker)) return 'SUCCESS';
+            if (stepRan(steps.captchaMarker)) return 'CAPTCHA_BLOCKED';
+            if (stepRan(steps.rateLimitMarker)) return 'RATE_LIMITED';
+            if (steps.statusCheckStep?.conclusion === 'failure') return 'FAILED';
+            if (steps.updateStep?.conclusion === 'failure') return 'FAILED';
+            // Runs after CAPTCHA/rate marker steps but before "Mark profile updated"
+            if (
+                stepRan(steps.statusCheckStep) &&
+                stepRan(steps.updateStep) &&
+                steps.captchaMarker &&
+                steps.captchaMarker.conclusion === 'skipped' &&
+                steps.rateLimitMarker &&
+                steps.rateLimitMarker.conclusion === 'skipped'
+            ) {
+                return 'SUCCESS';
+            }
+            return null;
+        }
+
+        function getRunDisplayBadge(run) {
+            const bot = run.botStatus;
+            if (bot === 'SUCCESS') {
+                return { statusClass: 'status-success', statusText: 'SUCCESS' };
+            }
+            if (bot === 'CAPTCHA_BLOCKED') {
+                return { statusClass: 'status-captcha', statusText: 'CAPTCHA' };
+            }
+            if (bot === 'RATE_LIMITED') {
+                return { statusClass: 'status-warning', statusText: 'RATE LIMITED' };
+            }
+            if (bot === 'FAILED') {
+                return { statusClass: 'status-failure', statusText: 'FAILURE' };
+            }
+            return {
+                statusClass: getStatusClass(run.status, run.conclusion),
+                statusText: getStatusText(run.status, run.conclusion),
+            };
+        }
+
         // Detect actual status from job steps
         function detectActualStatus(jobs) {
+            const bot = resolveBotStatusFromJobs(jobs);
+            if (bot === 'SUCCESS') {
+                return { status: 'success-verified', message: '✅ Profile updated successfully', icon: '✅' };
+            }
+            if (bot === 'CAPTCHA_BLOCKED') {
+                return { status: 'captcha-blocked', message: '🛡️ Blocked by CAPTCHA (profile not updated)', icon: '🛡️' };
+            }
+            if (bot === 'RATE_LIMITED') {
+                return { status: 'rate-limited', message: '🕒 Rate limited — will retry on schedule', icon: '🕒' };
+            }
+            if (bot === 'FAILED') {
+                return { status: 'failure', message: '❌ Update failed — see logs', icon: '❌' };
+            }
             if (!jobs || jobs.length === 0) {
                 return { status: 'unknown', message: null, icon: '' };
             }
-
-            // Find the main update job
             const updateJob = jobs.find(j => j.name === 'update');
-            if (!updateJob) {
-                return { status: 'unknown', message: null, icon: '' };
-            }
-
-            // NEW: Check for "Check run status" step (added in workflow improvement)
-            const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
-            if (statusCheckStep) {
-                // If status check step succeeded, profile was likely updated or rate limited (both OK)
-                if (statusCheckStep.conclusion === 'success') {
-                    // Check the update script step to determine which one
-                    const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
-                    if (updateStep && updateStep.conclusion === 'success') {
-                        return {
-                            status: 'success-verified',
-                            message: '✅ Profile updated successfully (verified)',
-                            icon: '✅'
-                        };
-                    }
-                    // If update step didn't fully succeed but status check did, likely rate limited
-                    return {
-                        status: 'rate-limited',
-                        message: '🕒 Rate limited by Naukri - will retry in 6 hours',
-                        icon: '🕒'
-                    };
-                } else if (statusCheckStep.conclusion === 'failure') {
-                    return {
-                        status: 'failure',
-                        message: '❌ Update failed - click View Logs for details',
-                        icon: '❌'
-                    };
-                }
-            }
-
-            // Fallback: Check the "Run update script" step
-            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
-            if (updateStep) {
-                if (updateStep.conclusion === 'success') {
-                    return { 
-                        status: 'success', 
-                        message: '✓ Workflow completed - verify in logs if needed',
-                        icon: '✓'
-                    };
-                } else if (updateStep.conclusion === 'failure') {
-                    return { 
-                        status: 'failure', 
-                        message: '❌ Script execution failed - check logs',
-                        icon: '❌'
-                    };
-                }
-            }
-
-            // Fallback to workflow conclusion
-            if (updateJob.conclusion === 'success') {
-                return { status: 'success', message: 'Workflow completed', icon: '✓' };
-            } else if (updateJob.conclusion === 'failure') {
+            if (updateJob?.conclusion === 'failure') {
                 return { status: 'failure', message: 'Workflow failed', icon: '❌' };
             }
-
-            return { status: 'unknown', message: null, icon: '❓' };
+            return { status: 'unknown', message: 'Open card for details', icon: '❓' };
         }
 
         // Get trigger type icon and text
@@ -1011,7 +1039,7 @@
             return 'status-skipped';
         }
 
-        // Parse detailed status from job steps
+        // Parse detailed status from job steps (uses same markers as run_status.json)
         function parseDetailedStatus(jobs) {
             if (!jobs || jobs.length === 0) {
                 return {
@@ -1019,158 +1047,143 @@
                     statusIcon: '❓',
                     statusClass: 'warning-box',
                     description: 'Could not fetch job details',
-                    errorInfo: null
+                    errorInfo: null,
+                    botStatus: null,
                 };
             }
 
-            const updateJob = jobs.find(j => j.name === 'update');
-            if (!updateJob) {
+            const steps = getJobSteps(jobs);
+            if (!steps.updateJob) {
                 return {
                     actualStatus: 'Unknown Job',
                     statusIcon: '❓',
                     statusClass: 'warning-box',
                     description: 'Update job not found in workflow',
-                    errorInfo: null
+                    errorInfo: null,
+                    botStatus: null,
                 };
             }
 
-            // Check for workflow steps
-            const statusCheckStep = updateJob.steps?.find(s => s.name === 'Check run status');
-            const updateStep = updateJob.steps?.find(s => s.name === 'Run update script');
-            const rateLimitMarker = updateJob.steps?.find(s => s.name === 'Mark as Rate Limited');
-            
-            // Find failed steps
-            const failedSteps = updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
+            const failedSteps = steps.updateJob.steps?.filter(s => s.conclusion === 'failure') || [];
 
-            // NEW RUNS: Check for rate limit marker step (most reliable for future runs)
-            // The step must have actually RUN (conclusion: success), not just exist but be skipped
-            if (rateLimitMarker && rateLimitMarker.conclusion === 'success') {
+            if (stepRan(steps.profileUpdatedMarker)) {
+                return {
+                    actualStatus: 'Profile Updated',
+                    statusIcon: '✅',
+                    statusClass: 'success-box',
+                    description: 'Profile headline was successfully updated on Naukri.com',
+                    errorInfo: null,
+                    botStatus: 'SUCCESS',
+                };
+            }
+
+            if (
+                stepRan(steps.statusCheckStep) &&
+                stepRan(steps.updateStep) &&
+                steps.captchaMarker &&
+                steps.captchaMarker.conclusion === 'skipped' &&
+                steps.rateLimitMarker &&
+                steps.rateLimitMarker.conclusion === 'skipped'
+            ) {
+                return {
+                    actualStatus: 'Profile Updated',
+                    statusIcon: '✅',
+                    statusClass: 'success-box',
+                    description: 'Profile headline was successfully updated on Naukri.com (inferred from workflow steps)',
+                    errorInfo: null,
+                    botStatus: 'SUCCESS',
+                };
+            }
+
+            if (stepRan(steps.captchaMarker)) {
+                return {
+                    actualStatus: 'CAPTCHA Blocked',
+                    statusIcon: '🛡️',
+                    statusClass: 'warning-box',
+                    description: 'Naukri showed bot protection (CAPTCHA). The profile was not updated.',
+                    errorInfo: 'Retry on the next scheduled run, or log in once manually in a browser to clear the challenge.',
+                    botStatus: 'CAPTCHA_BLOCKED',
+                };
+            }
+
+            if (stepRan(steps.rateLimitMarker)) {
                 return {
                     actualStatus: 'Rate Limited',
                     statusIcon: '🕒',
                     statusClass: 'warning-box',
-                    description: 'Naukri.com temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
-                    errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours). Rate limiting helps prevent account lockouts.'
+                    description: 'Naukri temporarily blocked OTP generation due to frequent requests. This is expected behavior, not an error.',
+                    errorInfo: 'The bot will automatically retry on the next scheduled run (in ~6 hours).',
+                    botStatus: 'RATE_LIMITED',
                 };
             }
 
-            // ENHANCED: Check if both "Run update script" and "Check run status" steps succeeded
-            // This means the workflow completed successfully (either SUCCESS or RATE_LIMITED gracefully)
-            if (statusCheckStep && updateStep) {
-                // If BOTH steps succeeded, it means:
-                // - Either profile was updated successfully (SUCCESS in status file)
-                // - OR it was rate limited and exited gracefully (RATE_LIMITED in status file, exit code 0)
-                //
-                // The "Mark as Rate Limited" step will ONLY run if status was RATE_LIMITED
-                // So if that step exists, it's definitely rate limited
-                // If that step doesn't exist and both succeeded, it's a SUCCESS
-                
-                if (statusCheckStep.conclusion === 'success' && updateStep.conclusion === 'success') {
-                    // Both succeeded - this is a SUCCESS (the bot completed its task)
-                    // Rate limited runs will be caught by the "Mark as Rate Limited" step above
-                    return {
-                        actualStatus: 'Success',
-                        statusIcon: '✅',
-                        statusClass: 'success-box',
-                        description: 'Profile headline was successfully updated on Naukri.com',
-                        errorInfo: null
-                    };
-                }
-                
-                // If update step succeeded but status check failed, that's a true failure
-                if (updateStep.conclusion === 'success' && statusCheckStep.conclusion === 'failure') {
-                    return {
-                        actualStatus: 'Failed',
-                        statusIcon: '❌',
-                        statusClass: 'error-box',
-                        description: 'The profile update script encountered an error and failed to complete.',
-                        errorInfo: 'The script ran but reported a failure status. Check complete logs for error details.'
-                    };
-                }
-                
-                // If update step failed (exit code != 0), it's definitely a failure
-                if (updateStep.conclusion === 'failure') {
-                    const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
-                    return {
-                        actualStatus: 'Failed',
-                        statusIcon: '❌',
-                        statusClass: 'error-box',
-                        description: 'Script execution failed with an error',
-                        errorInfo: `Failed steps: ${errorDetails || 'Run update script'}. Check complete logs for stack trace and error details.`
-                    };
-                }
-            }
-            
-            // If status check exists but update step didn't succeed
-            if (statusCheckStep && statusCheckStep.conclusion === 'success') {
-                return {
-                    actualStatus: 'Completed',
-                    statusIcon: '✅',
-                    statusClass: 'success-box',
-                    description: 'Workflow completed successfully',
-                    errorInfo: null
-                }
-            }
-            
-            // If status check failed
-            if (statusCheckStep && statusCheckStep.conclusion === 'failure') {
-                const errorDetails = failedSteps.map(s => `Step "${s.name}" failed`).join(', ');
+            if (steps.statusCheckStep?.conclusion === 'failure' || steps.updateStep?.conclusion === 'failure') {
+                const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
                 return {
                     actualStatus: 'Failed',
                     statusIcon: '❌',
                     statusClass: 'error-box',
                     description: 'The profile update script encountered an error and failed to complete.',
-                    errorInfo: errorDetails || 'Check the complete logs for detailed error information'
+                    errorInfo: errorDetails
+                        ? `Failed steps: ${errorDetails}. Check complete logs for OTP/Gmail/login details.`
+                        : 'Check the complete logs for error details.',
+                    botStatus: 'FAILED',
                 };
-            }
-            
-            // OLD RUNS: Don't have "Check run status" step (before we added it)
-            // Can't distinguish between success and rate limiting reliably
-            if (updateStep) {
-                if (updateStep.conclusion === 'success') {
-                    return {
-                        actualStatus: 'Completed',
-                        statusIcon: '⚠️',
-                        statusClass: 'warning-box',
-                        description: 'Workflow completed. This is an older run without detailed status tracking.',
-                        errorInfo: 'Click "View Complete Logs" to verify if the profile was actually updated or if it was rate limited. Newer runs show accurate status automatically.'
-                    };
-                } else if (updateStep.conclusion === 'failure') {
-                    const errorDetails = failedSteps.map(s => `"${s.name}"`).join(', ');
-                    return {
-                        actualStatus: 'Failed',
-                        statusIcon: '❌',
-                        statusClass: 'error-box',
-                        description: 'Script execution failed',
-                        errorInfo: `Failed steps: ${errorDetails || 'Unknown'}. Check complete logs for stack trace.`
-                    };
-                }
             }
 
-            // Fallback
-            if (updateJob.conclusion === 'success') {
+            if (steps.statusCheckStep?.conclusion === 'success' && steps.updateStep?.conclusion === 'success') {
                 return {
-                    actualStatus: 'Success',
-                    statusIcon: '✅',
-                    statusClass: 'success-box',
-                    description: 'Workflow completed successfully',
-                    errorInfo: null
+                    actualStatus: 'Completed (unconfirmed)',
+                    statusIcon: '⚠️',
+                    statusClass: 'warning-box',
+                    description: 'Workflow finished without error, but no "profile updated" marker (older run or missing run_status.json).',
+                    errorInfo: 'Check complete logs and run_status.json in artifacts.',
+                    botStatus: null,
                 };
-            } else {
+            }
+
+            if (steps.updateJob.conclusion === 'failure') {
                 return {
                     actualStatus: 'Failed',
                     statusIcon: '❌',
                     statusClass: 'error-box',
                     description: 'Workflow failed',
-                    errorInfo: 'Check complete logs for error details'
+                    errorInfo: 'Check complete logs for error details',
+                    botStatus: 'FAILED',
                 };
             }
+
+            return {
+                actualStatus: 'Unknown',
+                statusIcon: '❓',
+                statusClass: 'warning-box',
+                description: 'Could not determine outcome from workflow steps',
+                errorInfo: null,
+                botStatus: null,
+            };
+        }
+
+        async function enrichRunsWithBotStatus(runs, maxEnrich = 15) {
+            const targets = runs.slice(0, maxEnrich);
+            await Promise.all(
+                targets.map(async (run) => {
+                    try {
+                        const jobs = await fetchJobDetails(run.id);
+                        run.botStatus = resolveBotStatusFromJobs(jobs);
+                        run.botStatusDetails = parseDetailedStatus(jobs);
+                    } catch (e) {
+                        run.botStatus = null;
+                        console.warn('Could not enrich run', run.run_number, e);
+                    }
+                })
+            );
         }
 
         // Create run card element with flip functionality
         function createRunCard(run, index) {
-            const statusClass = getStatusClass(run.status, run.conclusion);
-            const statusText = getStatusText(run.status, run.conclusion);
+            const badge = getRunDisplayBadge(run);
+            const statusClass = badge.statusClass;
+            const statusText = badge.statusText;
             const duration = run.updated_at && run.created_at 
                 ? new Date(run.updated_at) - new Date(run.created_at)
                 : null;
@@ -1268,16 +1281,31 @@
             }
             
             try {
-                const jobs = await fetchJobDetails(runId);
-                const details = parseDetailedStatus(jobs);
-                
-                // Get run info
                 const runs = JSON.parse(sessionStorage.getItem('cachedRuns') || '[]');
                 const run = runs.find(r => r.id === runId);
+                let details = run?.botStatusDetails;
+                let jobs = null;
+                if (!details) {
+                    jobs = await fetchJobDetails(runId);
+                    details = parseDetailedStatus(jobs);
+                }
+                if (run) {
+                    if (details.botStatus) {
+                        run.botStatus = details.botStatus;
+                    }
+                    run.botStatusDetails = details;
+                    sessionStorage.setItem('cachedRuns', JSON.stringify(runs));
+                    const badge = getRunDisplayBadge(run);
+                    const badgeEl = card.querySelector('.status-badge');
+                    if (badgeEl) {
+                        badgeEl.className = `status-badge ${badge.statusClass}`;
+                        badgeEl.textContent = badge.statusText;
+                    }
+                }
                 
                 // Get the actual job URL (not just run URL)
                 const updateJob = jobs?.find(j => j.name === 'update');
-                const jobUrl = updateJob?.html_url || run?.html_url;
+                const jobUrl = updateJob?.html_url || run?.html_url || `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}`;
 
                 backEl.innerHTML = `
                     <div class="back-content">
@@ -1336,21 +1364,32 @@
             }
         }
 
-        // Calculate statistics
+        // Calculate statistics (profile updated = SUCCESS marker, not raw GitHub conclusion)
         function calculateStats(runs) {
             const total = runs.length;
-            const successful = runs.filter(r => r.conclusion === 'success').length;
-            const failed = runs.filter(r => r.conclusion === 'failure').length;
-            const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
-            
+            let profileSuccess = 0;
+            let failed = 0;
+            let captcha = 0;
+            let rateLimited = 0;
+
+            runs.forEach((run) => {
+                const bot = run.botStatus;
+                if (bot === 'SUCCESS') profileSuccess += 1;
+                else if (bot === 'CAPTCHA_BLOCKED') captcha += 1;
+                else if (bot === 'RATE_LIMITED') rateLimited += 1;
+                else if (bot === 'FAILED') failed += 1;
+                else if (run.conclusion === 'failure') failed += 1;
+                // GitHub "success" without a bot marker (CAPTCHA/rate limit/profile) is not a profile update
+            });
+
+            const successRate = total > 0 ? Math.round((profileSuccess / total) * 100) : 0;
             const lastRun = runs[0];
             let lastStatus = 'N/A';
             if (lastRun) {
-                const status = getStatusText(lastRun.status, lastRun.conclusion);
-                lastStatus = status.charAt(0).toUpperCase() + status.slice(1);
+                lastStatus = getRunDisplayBadge(lastRun).statusText;
             }
 
-            return { total, successful, failed, successRate, lastStatus };
+            return { total, profileSuccess, failed, captcha, rateLimited, successRate, lastStatus };
         }
 
         // Update stats display
@@ -1359,21 +1398,17 @@
             document.getElementById('totalRuns').textContent = stats.total;
             document.getElementById('successRate').textContent = `${stats.successRate}%`;
             document.getElementById('lastRun').textContent = stats.lastStatus;
-            
-            // Update status breakdown badge
-            // Note: We can't determine actual rate-limited vs success without job details
-            // So we show success/failed based on workflow conclusion
-            const otherCount = stats.total - stats.successful - stats.failed;
-            let breakdownHTML = `<span class="status-pill">✅ ${stats.successful}</span>`;
-            
+
+            let breakdownHTML = `<span class="status-pill">✅ ${stats.profileSuccess}</span>`;
             if (stats.failed > 0) {
                 breakdownHTML += `<span class="status-pill failure">❌ ${stats.failed}</span>`;
             }
-            
-            if (otherCount > 0) {
-                breakdownHTML += `<span class="status-pill other">⚠️ ${otherCount}</span>`;
+            if (stats.captcha > 0) {
+                breakdownHTML += `<span class="status-pill other">🛡️ ${stats.captcha}</span>`;
             }
-            
+            if (stats.rateLimited > 0) {
+                breakdownHTML += `<span class="status-pill other">🕒 ${stats.rateLimited}</span>`;
+            }
             document.getElementById('statusBreakdown').innerHTML = breakdownHTML;
         }
 
@@ -1392,9 +1427,11 @@
             // Filter runs based on type
             let filteredRuns = allRuns;
             if (filterType === 'success') {
-                filteredRuns = allRuns.filter(r => r.conclusion === 'success');
+                filteredRuns = allRuns.filter(r => r.botStatus === 'SUCCESS' || (!r.botStatus && r.conclusion === 'success'));
             } else if (filterType === 'failure') {
-                filteredRuns = allRuns.filter(r => r.conclusion === 'failure');
+                filteredRuns = allRuns.filter(r =>
+                    r.botStatus === 'FAILED' || (!r.botStatus && r.conclusion === 'failure')
+                );
             }
 
             // Re-render filtered runs
@@ -1473,10 +1510,17 @@
                     // Store all runs globally for filtering
                     allRuns = runs;
 
-                    // Store runs in session storage for card flip access
-                    sessionStorage.setItem('cachedRuns', JSON.stringify(runs));
+                    contentDiv.innerHTML = `
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading run details (syncing bot status)...</p>
+                        </div>
+                    `;
 
-                    // Update stats (always use all runs for stats)
+                    await enrichRunsWithBotStatus(allRuns, 15);
+
+                    sessionStorage.setItem('cachedRuns', JSON.stringify(allRuns));
+
                     updateStats(allRuns);
 
                     // Reset filter to 'all' and update button states
