@@ -258,9 +258,10 @@ Click **"New repository secret"** for each of these:
 
 ## ✅ Step 5: Verify Setup
 
-You should now have **5 secrets** in total:
+You should now have **6 secrets** in total:
 - ✅ `NAUKRI_EMAIL` (your Naukri login email)
 - ✅ `NAUKRI_PASSWORD` (your Naukri password)
+- ✅ `NAUKRI_HEADLINE` (the resume headline written on each update)
 - ✅ `GMAIL_CLIENT_ID` ← NEW
 - ✅ `GMAIL_CLIENT_SECRET` ← NEW
 - ✅ `GMAIL_REFRESH_TOKEN` ← NEW
@@ -397,6 +398,7 @@ Before deploying to GitHub Actions, test locally:
 ```bash
 NAUKRI_EMAIL=your_email@gmail.com
 NAUKRI_PASSWORD=your_password
+NAUKRI_HEADLINE=your_resume_headline
 GMAIL_CLIENT_ID=your_client_id
 GMAIL_CLIENT_SECRET=your_secret
 GMAIL_REFRESH_TOKEN=your_refresh_token

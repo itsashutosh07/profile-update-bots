@@ -72,6 +72,7 @@ Automatically updates your Naukri.com profile daily at 6:00 AM IST using **GitHu
 3. **Add GitHub Secrets**
    - `NAUKRI_EMAIL`
    - `NAUKRI_PASSWORD`
+   - `NAUKRI_HEADLINE`
    - `GMAIL_CLIENT_ID`
    - `GMAIL_CLIENT_SECRET`
    - `GMAIL_REFRESH_TOKEN`
@@ -237,6 +238,7 @@ pip install -r requirements.txt
 cat > .env << EOF
 NAUKRI_EMAIL=your_email@gmail.com
 NAUKRI_PASSWORD=your_password
+NAUKRI_HEADLINE=your_resume_headline
 GMAIL_CLIENT_ID=your_client_id
 GMAIL_CLIENT_SECRET=your_secret
 GMAIL_REFRESH_TOKEN=your_token
@@ -345,7 +347,7 @@ updated_text = (
 3. **Verify secrets**
    ```
    Settings → Secrets and variables → Actions
-   Should have 5 secrets total
+   Should have 6 secrets total
    ```
 
 4. **Test locally**

@@ -110,14 +110,21 @@ This is how you store your email and password **securely** without exposing them
 
 4. **Add First Secret**:
    - Name: `NAUKRI_EMAIL`
-   - Secret: `7.ashutoshj@gmail.com`
+   - Secret: `your_email@example.com`
    - Click **"Add secret"**
 
 5. Click **"New repository secret"** again
 
 6. **Add Second Secret**:
    - Name: `NAUKRI_PASSWORD`
-   - Secret: `Qwer!yu7890`
+   - Secret: `your_password`
+   - Click **"Add secret"**
+
+7. Click **"New repository secret"** again
+
+8. **Add Third Secret**:
+   - Name: `NAUKRI_HEADLINE`
+   - Secret: `your_resume_headline`
    - Click **"Add secret"**
 
 ✅ **Your credentials are now secure!** They're encrypted and never visible in your code.

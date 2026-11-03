@@ -62,8 +62,9 @@ naukri/
    - Logs Screenshot/ (if any)
 
 🔒 Add as GitHub Secrets:
-   - NAUKRI_EMAIL = 7.ashutoshj@gmail.com
-   - NAUKRI_PASSWORD = Qwer!yu7890
+   - NAUKRI_EMAIL = your_email@example.com
+   - NAUKRI_PASSWORD = your_password
+   - NAUKRI_HEADLINE = your_resume_headline
 
 ================================================================================
   FEATURES

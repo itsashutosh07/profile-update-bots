@@ -191,7 +191,7 @@ Full automation support with:
    - Quick guide: [`naukri/QUICK_START_OTP.md`](naukri/QUICK_START_OTP.md)
 
 4. **Configure GitHub Secrets**
-   - Add 5 secrets total (2 for Naukri, 3 for Gmail)
+   - Add 6 secrets total (3 for Naukri, 3 for Gmail)
    - Names must be exact (case-sensitive)
    - All credentials encrypted by GitHub
 

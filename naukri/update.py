@@ -1,7 +1,9 @@
 import os
+import re
 import sys
 import time
 import json
+import subprocess
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
@@ -20,17 +22,18 @@ from gmail_otp_reader import get_otp_from_gmail
 load_dotenv()
 email = os.environ.get("NAUKRI_EMAIL")
 password = os.environ.get("NAUKRI_PASSWORD")
+headline = os.environ.get("NAUKRI_HEADLINE", "").strip()
 
 # Validate credentials
-if not email or not password:
+if not email or not password or not headline:
     print("[ERROR] Missing credentials!")
     print("Please create a .env file with:")
     print("NAUKRI_EMAIL=your_email@example.com")
     print("NAUKRI_PASSWORD=your_password")
+    print("NAUKRI_HEADLINE=your_resume_headline")
     exit(1)
 
 # Security: Basic email format validation
-import re
 if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
     print(f"[ERROR] Invalid email format: {email}")
     print("Please provide a valid email address")
@@ -49,10 +52,42 @@ print(f"[INFO] Screenshots will be saved in: {log_dir}")
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
-USER_AGENT = (
+DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
+
+OTP_INPUT_SELECTORS = [
+    "input[type='text'][maxlength='1']",
+    "input[type='tel'][maxlength='1']",
+    "input[placeholder*='OTP' i]",
+    "input[id*='otp' i]",
+    "input[name*='otp' i]",
+    "input[class*='otp' i]",
+]
+
+
+def build_chrome_user_agent():
+    """Match User-Agent to installed Chrome to reduce headless fingerprint mismatch."""
+    for binary in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
+        try:
+            out = subprocess.check_output([binary, "--version"], text=True, stderr=subprocess.STDOUT).strip()
+            match = re.search(r"(\d+\.\d+\.\d+\.\d+)", out)
+            if match:
+                version = match.group(1)
+                ua = (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    f"(KHTML, like Gecko) Chrome/{version} Safari/537.36"
+                )
+                print(f"[INFO] Using Chrome User-Agent for version {version}")
+                return ua
+        except (FileNotFoundError, subprocess.SubprocessError, OSError):
+            continue
+    print("[INFO] Using default Chrome User-Agent")
+    return DEFAULT_USER_AGENT
+
+
+USER_AGENT = build_chrome_user_agent()
 
 # Function to write status summary for dashboard
 def write_status_summary(status, message, details=None):
@@ -200,6 +235,282 @@ def find_clickable(selectors, timeout=15, description="element"):
     raise TimeoutException(f"Could not find clickable {description}. Last error: {last_err}")
 
 
+def collect_visible_otp_inputs():
+    """Return visible OTP digit inputs, sorted left-to-right when possible."""
+    for selector in OTP_INPUT_SELECTORS:
+        try:
+            elements = driver.find_elements(By.CSS_SELECTOR, selector)
+            visible = [el for el in elements if el.is_displayed()]
+            if visible:
+                try:
+                    visible.sort(key=lambda el: (el.location.get("y", 0), el.location.get("x", 0)))
+                except Exception:
+                    pass
+                return visible
+        except Exception:
+            continue
+
+    all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel']")
+    visible_inputs = [
+        inp for inp in all_inputs if inp.is_displayed() and inp.get_attribute("maxlength") == "1"
+    ]
+    if visible_inputs:
+        try:
+            visible_inputs.sort(key=lambda el: (el.location.get("y", 0), el.location.get("x", 0)))
+        except Exception:
+            pass
+    return visible_inputs
+
+
+def set_otp_digit(element, digit):
+    """Set one OTP digit and notify React-controlled inputs."""
+    driver.execute_script(
+        """
+        const el = arguments[0];
+        const val = arguments[1];
+        el.focus();
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        """,
+        element,
+        digit,
+    )
+
+
+def enter_otp_code(otp_inputs, otp_code):
+    """Type OTP into Naukri single- or multi-box fields."""
+    if len(otp_inputs) >= 6 and len(otp_code) == 6:
+        print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
+        for i, digit in enumerate(otp_code):
+            if i >= len(otp_inputs):
+                break
+            try:
+                otp_inputs[i].click()
+                time.sleep(0.15)
+                set_otp_digit(otp_inputs[i], digit)
+                otp_inputs[i].send_keys(digit)
+                print(f"[OTP] Entered digit {i + 1}")
+                time.sleep(0.25)
+            except Exception as e:
+                print(f"[OTP] Error entering digit {i + 1}: {e}")
+                set_otp_digit(otp_inputs[i], digit)
+    elif otp_inputs:
+        print("[OTP] Entering OTP in single field...")
+        otp_inputs[0].click()
+        time.sleep(0.3)
+        otp_inputs[0].clear()
+        otp_inputs[0].send_keys(otp_code)
+    else:
+        raise Exception("No OTP input fields found to enter code")
+
+
+def clear_otp_inputs(otp_inputs):
+    for el in otp_inputs:
+        try:
+            set_otp_digit(el, "")
+            el.clear()
+        except Exception:
+            pass
+
+
+def click_otp_verify_button():
+    """Click the OTP card Verify button (avoid header/login submit)."""
+    verify_selectors = [
+        "//*[contains(translate(., 'ENTER THE OTP', 'enter the otp'), 'enter the otp')]"
+        "//button[contains(translate(normalize-space(.), 'VERIFY', 'verify'), 'verify')]",
+        "//button[contains(translate(normalize-space(.), 'VERIFY', 'verify'), 'verify') "
+        "and not(ancestor::*[contains(@class, 'header')])]",
+        "//button[contains(translate(normalize-space(.), 'SUBMIT', 'submit'), 'submit')]",
+        "//button[contains(translate(normalize-space(.), 'CONTINUE', 'continue'), 'continue')]",
+    ]
+
+    for selector in verify_selectors:
+        try:
+            verify_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, selector))
+            )
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'}); arguments[0].click();",
+                verify_btn,
+            )
+            print(f"[OTP] Verify button clicked using selector: {selector}")
+            return True
+        except Exception:
+            continue
+
+    if otp_inputs := collect_visible_otp_inputs():
+        try:
+            otp_inputs[-1].send_keys(Keys.RETURN)
+            print("[OTP] Pressed Enter on last OTP field")
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def otp_page_error_snippet(page_text):
+    """Return a short visible error string from the OTP page if present."""
+    markers = [
+        "oops! something went wrong",
+        "invalid otp",
+        "incorrect otp",
+        "otp expired",
+        "otp is invalid",
+        "please try again",
+        "max limit to generate otp",
+    ]
+    for marker in markers:
+        if marker in page_text:
+            return marker
+    return ""
+
+
+def is_invalid_otp_error(page_text):
+    return any(
+        err in page_text
+        for err in ("invalid otp", "incorrect otp", "otp expired", "otp is invalid")
+    )
+
+
+def is_transient_otp_error(page_text):
+    return any(
+        err in page_text
+        for err in (
+            "something went wrong",
+            "please try again",
+            "try again after",
+        )
+    )
+
+
+def wait_until_logged_in_after_otp(timeout_seconds=45):
+    """Wait for navigation away from OTP/login challenge."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        url = driver.current_url.lower()
+        if not is_otp_page():
+            if "nlogin/login" not in url and not is_login_form_visible():
+                return True
+            if "mnjuser" in url and "login" not in url and "nlogin" not in url:
+                return True
+        time.sleep(1)
+    return False
+
+
+def click_resend_otp_link():
+    """Request a fresh OTP when Naukri shows resend."""
+    for xpath in [
+        "//*[contains(translate(., 'RESEND', 'resend'), 'resend')]",
+        "//a[contains(translate(., 'RESEND', 'resend'), 'resend')]",
+        "//button[contains(translate(., 'RESEND', 'resend'), 'resend')]",
+    ]:
+        try:
+            el = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, xpath)))
+            driver.execute_script("arguments[0].click();", el)
+            print("[OTP] Clicked resend OTP")
+            time.sleep(3)
+            return True
+        except Exception:
+            continue
+    print("[OTP] Resend OTP control not found")
+    return False
+
+
+def run_otp_verification_flow(login_submit_epoch):
+    """
+    Fetch Gmail OTP, enter, verify — with retry for transient Naukri errors.
+    Returns True when login proceeds past OTP.
+    """
+    driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
+
+    used_message_ids = set()
+    min_received_after = login_submit_epoch - 30
+    last_page_error = ""
+    otp_code = None
+
+    for attempt in range(1, 3):
+        print(f"[OTP] Verification attempt {attempt}/2")
+        if attempt == 1:
+            print("[OTP] Fetching OTP from Gmail API...")
+        else:
+            print("[OTP] Fetching fresh OTP from Gmail after retry...")
+
+        otp_result = get_otp_from_gmail(
+            sender_filter="naukri.com",
+            max_wait_seconds=90 if attempt == 1 else 120,
+            min_received_after=min_received_after,
+            exclude_message_ids=used_message_ids,
+        )
+        if not otp_result:
+            raise Exception("Failed to retrieve OTP from Gmail - check Gmail API credentials")
+
+        used_message_ids.add(otp_result["message_id"])
+        otp_code = otp_result["otp"]
+        print(
+            f"[OTP] ✓ Received OTP: {otp_code} "
+            f"(Gmail id {otp_result['message_id'][:10]}…)"
+        )
+
+        otp_inputs = collect_visible_otp_inputs()
+        if not otp_inputs:
+            time.sleep(2)
+            otp_inputs = collect_visible_otp_inputs()
+        if not otp_inputs:
+            raise Exception("OTP inputs disappeared before entry")
+
+        enter_otp_code(otp_inputs, otp_code)
+        driver.save_screenshot(os.path.join(log_dir, f"step_1_otp_entered_attempt_{attempt}.png"))
+        if attempt == 1:
+            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
+
+        time.sleep(1)
+        if not click_otp_verify_button():
+            print("[OTP] No verify button found - OTP might auto-submit")
+
+        if wait_until_logged_in_after_otp(timeout_seconds=45):
+            driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
+            print("[✓] OTP verification completed successfully")
+            return True
+
+        driver.save_screenshot(os.path.join(log_dir, f"step_1_after_otp_attempt_{attempt}.png"))
+        page_text = driver.page_source.lower()
+        last_page_error = otp_page_error_snippet(page_text)
+        print(f"[DEBUG] URL after OTP: {driver.current_url}")
+        print(f"[DEBUG] Title after OTP: {driver.title}")
+        if last_page_error:
+            print(f"[OTP] Page error: {last_page_error}")
+
+        if is_invalid_otp_error(page_text):
+            raise Exception(f"OTP verification failed - invalid/expired OTP ({last_page_error})")
+
+        if attempt == 1 and is_transient_otp_error(page_text):
+            print("[OTP] Transient error — re-entering same OTP and retrying verify...")
+            otp_inputs = collect_visible_otp_inputs()
+            if otp_inputs:
+                clear_otp_inputs(otp_inputs)
+                time.sleep(1)
+                enter_otp_code(otp_inputs, otp_code)
+                click_otp_verify_button()
+                if wait_until_logged_in_after_otp(timeout_seconds=30):
+                    driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
+                    print("[✓] OTP verification succeeded on immediate re-verify")
+                    return True
+
+            print("[OTP] Re-verify failed — requesting resend and waiting for new email...")
+            resend_at = time.time()
+            click_resend_otp_link()
+            min_received_after = resend_at - 10
+            time.sleep(5)
+            continue
+
+        break
+
+    driver.save_screenshot(os.path.join(log_dir, "step_1_otp_verification_failed.png"))
+    detail = last_page_error or "still on login/OTP page after submit"
+    raise Exception(f"OTP verification failed - {detail}")
+
+
 # Print ChromeDriver info only (skip broken chrome version detection on Windows)
 print("ChromeDriver path (via webdriver-manager):")
 print(ChromeDriverManager().install())
@@ -285,6 +596,7 @@ try:
         (By.XPATH, "//button[@type='submit']"),
         (By.XPATH, "//button[normalize-space()='Login']"),
     ], description="login button")
+    login_submit_epoch = time.time()
     login_btn.click()
     time.sleep(8)
     print("[✓] Login button clicked")
@@ -296,10 +608,8 @@ try:
         print(f"[DEBUG] Current URL after login: {driver.current_url}")
         print(f"[DEBUG] Page title after login: {driver.title}")
         
-        # Check if page content contains OTP-related text
         page_source = driver.page_source.lower()
         
-        # Check for rate limiting first
         rate_limit_keywords = [
             'max limit to generate otp',
             'reached max limit',
@@ -308,217 +618,56 @@ try:
             'otp limit exceeded'
         ]
         
-        is_rate_limited = any(keyword in page_source for keyword in rate_limit_keywords)
-        
-        if is_rate_limited:
+        if any(keyword in page_source for keyword in rate_limit_keywords):
             print("[OTP] 🚫 RATE LIMITED!")
-            print("[OTP] Naukri has blocked OTP generation due to too many requests.")
-            print("[OTP] This is expected when testing frequently.")
-            print("[OTP] The bot will try again on the next scheduled run (6 hours).")
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_rate_limited.png"))
-            
-            # Write status summary
             write_status_summary(
                 status="RATE_LIMITED",
                 message="Naukri rate limited OTP requests. Will retry in next scheduled run.",
                 details={"retry_in": "6 hours", "expected": True}
             )
-            
-            # Exit gracefully - this is not a failure, just need to wait
             print("[INFO] Exiting gracefully - will retry on next schedule")
             driver.quit()
             print("[INFO] Browser closed.")
-            sys.exit(0)  # Exit with success code since this is expected behavior
+            sys.exit(0)
         
-        has_otp_text = any(text in page_source for text in ['enter the otp', 'enter otp', 'otp sent', 'verification code', 'otp to login'])
-        
+        has_otp_text = any(
+            text in page_source
+            for text in [
+                'enter the otp',
+                'enter otp',
+                'otp sent',
+                'verification code',
+                'otp to login',
+            ]
+        )
         print(f"[DEBUG] OTP-related text in page: {has_otp_text}")
         
-        # Look for OTP input fields - try multiple selectors
-        otp_present = False
-        otp_inputs = []
+        otp_inputs = collect_visible_otp_inputs()
+        otp_present = len(otp_inputs) >= 4
         
-        # Common OTP field patterns - try them all
-        otp_selectors = [
-            "input[type='text'][maxlength='1']",  # Individual digit boxes
-            "input[type='tel'][maxlength='1']",    # Tel input with maxlength 1
-            "input[placeholder*='OTP' i]",         # OTP placeholder
-            "input[id*='otp' i]",                  # OTP in ID
-            "input[name*='otp' i]",                # OTP in name
-            "input[class*='otp' i]",               # OTP in class
-        ]
-        
-        for selector in otp_selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements and len(elements) > 0:
-                    # Filter out hidden elements
-                    visible_elements = [el for el in elements if el.is_displayed()]
-                    if visible_elements:
-                        otp_inputs = visible_elements
-                        otp_present = True
-                        print(f"[OTP] Found {len(visible_elements)} visible OTP input fields using selector: {selector}")
-                        break
-            except Exception as e:
-                print(f"[DEBUG] Error with selector {selector}: {str(e)}")
-                continue
-        
-        # If we found OTP text but no inputs, wait a bit more for page to load
         if has_otp_text and not otp_present:
             print("[OTP] OTP text found but inputs not detected yet, waiting for page to load...")
-            time.sleep(5)  # Increased wait time
-            
-            # Take a screenshot to see what's on the page
+            time.sleep(5)
             driver.save_screenshot(os.path.join(log_dir, "step_1_otp_page_loading.png"))
-            
-            # Try again with extended timeout
-            for selector in otp_selectors:
-                try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements:
-                        visible_elements = [el for el in elements if el.is_displayed()]
-                        if visible_elements:
-                            otp_inputs = visible_elements
-                            otp_present = True
-                            print(f"[OTP] Found {len(visible_elements)} OTP fields on retry")
-                            break
-                except:
-                    continue
-            
-            # If still not found, try waiting for the input to appear
-            if not otp_present:
-                print("[OTP] Still not found - trying explicit wait...")
-                try:
-                    wait = WebDriverWait(driver, 10)
-                    otp_input = wait.until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'][maxlength='1'], input[type='tel'][maxlength='1']"))
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, "input[type='text'][maxlength='1'], input[type='tel'][maxlength='1']")
                     )
-                    otp_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'][maxlength='1'], input[type='tel'][maxlength='1']")
-                    otp_present = True
-                    print(f"[OTP] Found {len(otp_inputs)} OTP fields via explicit wait")
-                except Exception as wait_err:
-                    print(f"[OTP] ❌ Explicit wait failed: {str(wait_err)}")
-                    driver.save_screenshot(os.path.join(log_dir, "step_1_otp_inputs_not_found.png"))
+                )
+            except Exception as wait_err:
+                print(f"[OTP] Explicit wait for OTP fields: {wait_err}")
+            otp_inputs = collect_visible_otp_inputs()
+            otp_present = len(otp_inputs) >= 4
         
         if otp_present or has_otp_text:
             print("[OTP] ⚠️  OTP verification required!")
-            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
-            
-            # Get OTP from Gmail
-            print("[OTP] Fetching OTP from Gmail API...")
-            otp_code = get_otp_from_gmail(sender_filter="naukri.com", max_wait_seconds=90)
-            
-            if not otp_code:
-                raise Exception("Failed to retrieve OTP from Gmail - check Gmail API credentials")
-            
-            print(f"[OTP] ✓ Received OTP: {otp_code}")
-            
-            # Re-fetch OTP inputs in case page structure changed
-            time.sleep(1)
-            for selector in otp_selectors:
-                try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements:
-                        visible_elements = [el for el in elements if el.is_displayed()]
-                        if visible_elements:
-                            otp_inputs = visible_elements
-                            break
-                except:
-                    continue
-            
-            # Enter OTP
-            if not otp_inputs:
-                # If still no inputs found, try a more generic approach
-                print("[OTP] Trying to find OTP inputs more generically...")
-                all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel']")
-                visible_inputs = [inp for inp in all_inputs if inp.is_displayed() and inp.get_attribute('maxlength') == '1']
-                if visible_inputs:
-                    otp_inputs = visible_inputs
-                    print(f"[OTP] Found {len(otp_inputs)} generic OTP fields")
-            
-            if len(otp_inputs) >= 6 and len(otp_code) == 6:
-                # Multiple input boxes (one digit each) - Naukri's style
-                print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
-                for i, digit in enumerate(otp_code):
-                    if i < len(otp_inputs):
-                        try:
-                            # Click to focus
-                            otp_inputs[i].click()
-                            time.sleep(0.3)
-                            # Clear and enter
-                            otp_inputs[i].clear()
-                            otp_inputs[i].send_keys(digit)
-                            print(f"[OTP] Entered digit {i+1}")
-                            time.sleep(0.5)
-                        except Exception as e:
-                            print(f"[OTP] Error entering digit {i+1}: {str(e)}")
-            elif otp_inputs:
-                # Single input box fallback
-                print("[OTP] Entering OTP in single field...")
-                otp_inputs[0].click()
-                time.sleep(0.5)
-                otp_inputs[0].clear()
-                otp_inputs[0].send_keys(otp_code)
-            else:
-                print("[OTP] ⚠️  No OTP input fields found - trying direct page interaction")
-                # Last resort - try to find any input and send keys
-                time.sleep(2)
-            
-            print("[OTP] OTP entered, saving screenshot...")
-            driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
-            
-            # Click verify/submit button
-            time.sleep(2)
-            verify_button_found = False
-            verify_selectors = [
-                "//button[contains(translate(text(), 'VERIFY', 'verify'), 'verify')]",
-                "//button[contains(translate(text(), 'SUBMIT', 'submit'), 'submit')]",
-                "//button[contains(translate(text(), 'CONTINUE', 'continue'), 'continue')]",
-                "//button[@type='submit']",
-                "//input[@type='submit']",
-            ]
-            
-            for selector in verify_selectors:
-                try:
-                    verify_btn = WebDriverWait(driver, 3).until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
-                    )
-                    verify_btn.click()
-                    print(f"[OTP] Verify button clicked using selector: {selector}")
-                    verify_button_found = True
-                    break
-                except:
-                    continue
-            
-            if not verify_button_found:
-                print("[OTP] No verify button found - OTP might auto-submit")
-                # Press Enter on last OTP input as fallback
-                if otp_inputs:
-                    try:
-                        otp_inputs[-1].send_keys(Keys.RETURN)
-                        print("[OTP] Pressed Enter on last OTP field")
-                    except:
-                        pass
-            
-            time.sleep(8)
-            driver.save_screenshot(os.path.join(log_dir, "step_1_after_otp_verification.png"))
-            print(f"[DEBUG] URL after OTP: {driver.current_url}")
-            print(f"[DEBUG] Title after OTP: {driver.title}")
-            
-            # Check if we're actually logged in
-            time.sleep(3)
-            if is_otp_page() or "nlogin/login" in driver.current_url.lower():
-                print("[OTP] ⚠️  Still on login/OTP page after submit")
-                driver.save_screenshot(os.path.join(log_dir, "step_1_otp_verification_failed.png"))
-                page_text = driver.page_source.lower()
-                if any(err in page_text for err in ['invalid otp', 'incorrect otp', 'otp expired', 'otp is invalid']):
-                    raise Exception("OTP verification failed - invalid/expired OTP")
-                raise Exception("OTP verification failed - still on login/OTP page after submit")
-            print("[✓] OTP verification completed successfully")
+            if otp_inputs:
+                print(f"[OTP] Found {len(otp_inputs)} visible OTP input fields")
+            run_otp_verification_flow(login_submit_epoch)
         else:
             print("[OTP] ℹ️  No OTP fields detected")
-            print(f"[DEBUG] Checked {len(otp_selectors)} different OTP selectors")
-            print(f"[DEBUG] Has OTP text on page: {has_otp_text}")
             url_l = driver.current_url.lower()
             if "mnjuser" in url_l and "login" not in url_l and "nlogin" not in url_l:
                 print("[OTP] ✅ No OTP required - already on authenticated mnjuser page")
@@ -531,10 +680,15 @@ try:
         print(f"[OTP] ❌ OTP handling error: {str(otp_error)}")
         print(f"[OTP] Traceback: {traceback.format_exc()}")
         driver.save_screenshot(os.path.join(log_dir, "step_1_otp_error.png"))
+        page_text = driver.page_source.lower()
         fail_and_exit(
             "OTP_FAILED",
             str(otp_error),
-            {"url": driver.current_url, "title": driver.title},
+            {
+                "url": driver.current_url,
+                "title": driver.title,
+                "page_error": otp_page_error_snippet(page_text),
+            },
         )
     
     # Verify login was successful — require real post-login URL, not page-source heuristics
@@ -613,10 +767,7 @@ try:
     textarea.click()
     time.sleep(1)
     textarea.clear()
-    updated_text = (
-        "Experienced Sr. Software Development Engineer. Expert in Backend Development, Microservices, Agile, Java, SpringBoot, Redis, Kafka, MySQL, Python, Jenkins, Git, AWS, HTML, CSS, JS, Golang, Mongo, CI/CD, AI, MCP, RAG, Agentic AI, Databases, GenAI"
-    )
-    textarea.send_keys(updated_text)
+    textarea.send_keys(headline)
     print("[✓] Text updated")
     driver.save_screenshot(os.path.join(log_dir, "step_4_text_updated.png"))
 

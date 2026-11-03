@@ -30,9 +30,10 @@ Add these **3 NEW secrets**:
 | `GMAIL_CLIENT_SECRET` | From `get_gmail_token.py` output |
 | `GMAIL_REFRESH_TOKEN` | From `get_gmail_token.py` output |
 
-You should have **5 total secrets**:
+You should have **6 total secrets**:
 - ✅ NAUKRI_EMAIL (existing)
 - ✅ NAUKRI_PASSWORD (existing)
+- ✅ NAUKRI_HEADLINE (existing)
 - 🆕 GMAIL_CLIENT_ID (new)
 - 🆕 GMAIL_CLIENT_SECRET (new)
 - 🆕 GMAIL_REFRESH_TOKEN (new)
@@ -66,8 +67,9 @@ pip install -r requirements.txt
 
 ### 2. Create `.env` file:
 ```bash
-NAUKRI_EMAIL=7.ashutoshj@gmail.com
-NAUKRI_PASSWORD=Qwer!yu7890
+NAUKRI_EMAIL=your_email@example.com
+NAUKRI_PASSWORD=your_password
+NAUKRI_HEADLINE=your_resume_headline
 GMAIL_CLIENT_ID=your_client_id_here
 GMAIL_CLIENT_SECRET=your_secret_here
 GMAIL_REFRESH_TOKEN=your_refresh_token_here
