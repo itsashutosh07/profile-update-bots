@@ -52,7 +52,7 @@ os.makedirs(log_dir, exist_ok=True)
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
-BOT_SCRIPT_VERSION = "2026-11-04-captcha-status-codes-v2"
+BOT_SCRIPT_VERSION = "2026-11-04-captcha-active-only-v3"
 
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
 print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
@@ -183,22 +183,28 @@ CAPTCHA_PAGE_MARKERS = (
     "select all images that contain",
     "select all squares",
     "select all images",
-    "recaptcha",
-    "g-recaptcha",
-    "hcaptcha",
-    "h-captcha",
-    "captcha",
-    "challenge-form",
     "verify you're human",
     "unusual traffic",
     "bot protection",
 )
 
 
+def _element_is_visibly_large(el, min_width=200, min_height=120):
+    try:
+        if not el.is_displayed():
+            return False
+        size = el.size or {}
+        return size.get("width", 0) >= min_width and size.get("height", 0) >= min_height
+    except Exception:
+        return False
+
+
 def detect_captcha_challenge(page_source=None):
     """
-    Return a short label if Naukri / Google image CAPTCHA is visible, else None.
-    Does not attempt to solve the challenge.
+    Return a short label if an active CAPTCHA challenge is visible, else None.
+
+    Naukri embeds invisible reCAPTCHA on the normal login page — ignore passive
+    scripts/iframes unless the image/grid challenge is actually shown.
     """
     try:
         page = (page_source or driver.page_source or "").lower()
@@ -210,27 +216,37 @@ def detect_captcha_challenge(page_source=None):
             return marker
 
     try:
-        for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
-            src = (iframe.get_attribute("src") or "").lower()
-            title = (iframe.get_attribute("title") or "").lower()
-            if any(token in src for token in ("recaptcha", "hcaptcha", "captcha", "challenge")):
-                return f"captcha iframe ({src[:96]})"
-            if "recaptcha" in title or "captcha" in title:
-                return "captcha iframe (title)"
+        challenge_xpaths = [
+            "//*[contains(translate(., 'SELECT ALL IMAGES', 'select all images'), 'select all images')]",
+            "//*[contains(translate(., 'SELECT ALL SQUARES', 'select all squares'), 'select all squares')]",
+        ]
+        for xpath in challenge_xpaths:
+            for el in driver.find_elements(By.XPATH, xpath):
+                if _element_is_visibly_large(el, min_width=180, min_height=80):
+                    return "visible image CAPTCHA prompt"
     except Exception:
         pass
 
     try:
-        captcha_xpaths = [
-            "//*[contains(translate(., 'SELECT ALL IMAGES', 'select all images'), 'select all images')]",
-            "//*[contains(translate(., 'SELECT ALL SQUARES', 'select all squares'), 'select all squares')]",
-            "//div[contains(@class, 'recaptcha')]",
-            "//iframe[contains(@src, 'recaptcha') or contains(@src, 'hcaptcha')]",
-        ]
-        for xpath in captcha_xpaths:
-            for el in driver.find_elements(By.XPATH, xpath):
-                if el.is_displayed():
-                    return "visible captcha challenge UI"
+        for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
+            src = (iframe.get_attribute("src") or "").lower()
+            title = (iframe.get_attribute("title") or "").lower()
+            # Challenge iframes (not invisible v3 anchor/badge)
+            is_challenge_frame = any(
+                token in src
+                for token in (
+                    "api2/bframe",
+                    "recaptcha/api2/bframe",
+                    "hcaptcha.com/captcha",
+                    "newassets.hcaptcha.com/captcha",
+                )
+            )
+            if is_challenge_frame and _element_is_visibly_large(iframe, min_width=200, min_height=150):
+                return f"visible captcha challenge iframe ({src[:80]})"
+            if ("recaptcha challenge" in title or "hcaptcha" in title) and _element_is_visibly_large(
+                iframe, min_width=200, min_height=150
+            ):
+                return "visible captcha challenge iframe (title)"
     except Exception:
         pass
 
@@ -245,6 +261,12 @@ def check_and_exit_if_captcha(context_label):
     print(f"[CAPTCHA] 🛡️  Bot protection CAPTCHA detected during: {context_label}")
     print(f"[CAPTCHA] Indicator: {marker}")
     print("[CAPTCHA] Automated login cannot continue (CAPTCHA will not be solved by this bot).")
+    captcha_shot = os.path.join(log_dir, "step_captcha_detected.png")
+    try:
+        driver.save_screenshot(captcha_shot)
+        print(f"[CAPTCHA] Screenshot saved: {captcha_shot}")
+    except Exception as e:
+        print(f"[CAPTCHA] Could not save screenshot: {e}")
     exit_gracefully(
         "CAPTCHA_BLOCKED",
         "Naukri showed a CAPTCHA challenge. Retry on the next scheduled run or log in manually once in a browser.",
@@ -253,8 +275,9 @@ def check_and_exit_if_captcha(context_label):
             "detected": marker,
             "expected": True,
             "action": "retry on next schedule or manual login",
+            "screenshot": "step_captcha_detected.png",
         },
-        screenshot_basename="step_captcha_detected",
+        screenshot_basename="captcha_blocked",
     )
     return True
 
