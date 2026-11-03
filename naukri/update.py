@@ -49,12 +49,13 @@ if len(password) < 8:
 timestamp = datetime.now().strftime("%d-%m-%y_%I-%M_%p")
 log_dir = os.path.join("Logs Screenshot", timestamp)
 os.makedirs(log_dir, exist_ok=True)
-print(f"[INFO] Screenshots will be saved in: {log_dir}")
-print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
 BOT_SCRIPT_VERSION = "2026-11-04-otp-react-xvfb"
+
+print(f"[INFO] Screenshots will be saved in: {log_dir}")
+print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
