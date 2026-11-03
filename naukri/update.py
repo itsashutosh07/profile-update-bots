@@ -52,7 +52,7 @@ os.makedirs(log_dir, exist_ok=True)
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
-BOT_SCRIPT_VERSION = "2026-11-04-captcha-status-codes"
+BOT_SCRIPT_VERSION = "2026-11-04-captcha-status-codes-v2"
 
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
 print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
@@ -257,6 +257,21 @@ def check_and_exit_if_captcha(context_label):
         screenshot_basename="step_captcha_detected",
     )
     return True
+
+
+def page_indicates_naukri_otp_prompt(page_source=None):
+    """Naukri-specific OTP copy (avoid matching CAPTCHA / generic 'verify' text)."""
+    page = (page_source or driver.page_source or "").lower()
+    return any(
+        phrase in page
+        for phrase in (
+            "enter the otp",
+            "enter otp sent",
+            "otp sent to",
+            "enter below otp",
+            "your otp for logging in",
+        )
+    )
 
 
 def is_otp_page():
@@ -919,17 +934,8 @@ try:
         if detect_captcha_challenge(page_source):
             check_and_exit_if_captcha("OTP detection (CAPTCHA blocking login flow)")
 
-        has_otp_text = any(
-            text in page_source
-            for text in [
-                'enter the otp',
-                'enter otp',
-                'otp sent',
-                'verification code',
-                'otp to login',
-            ]
-        )
-        print(f"[DEBUG] OTP-related text in page: {has_otp_text}")
+        has_otp_text = page_indicates_naukri_otp_prompt(page_source)
+        print(f"[DEBUG] Naukri OTP prompt text on page: {has_otp_text}")
         
         otp_inputs = collect_visible_otp_inputs()
         otp_present = len(otp_inputs) >= 4
