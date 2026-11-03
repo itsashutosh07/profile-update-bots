@@ -28,7 +28,7 @@ jobs:
     - name: Install Chrome
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget gnupg
+        sudo apt-get install -y wget gnupg xvfb
         wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
         echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google.list
         sudo apt-get update
@@ -49,10 +49,11 @@ jobs:
         GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
         GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
         GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
-        HEADLESS: "true"
+        HEADLESS: "false"
       run: |
         echo "=== Starting Naukri Profile Update ==="
-        python3 naukri/update.py
+        echo "Git commit: ${{ github.sha }}"
+        xvfb-run -a python3 naukri/update.py
         EXIT_CODE=$?
         echo "Script exited with code: $EXIT_CODE"
         exit $EXIT_CODE

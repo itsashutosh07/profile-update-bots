@@ -50,9 +50,11 @@ timestamp = datetime.now().strftime("%d-%m-%y_%I-%M_%p")
 log_dir = os.path.join("Logs Screenshot", timestamp)
 os.makedirs(log_dir, exist_ok=True)
 print(f"[INFO] Screenshots will be saved in: {log_dir}")
+print(f"[INFO] Bot script version: {BOT_SCRIPT_VERSION}")
 
 LOGIN_URL = "https://www.naukri.com/nlogin/login"
 PROFILE_URL = "https://www.naukri.com/mnjuser/profile"
+BOT_SCRIPT_VERSION = "2026-11-04-otp-react-xvfb"
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -237,41 +239,65 @@ def find_clickable(selectors, timeout=15, description="element"):
 
 
 def collect_visible_otp_inputs():
-    """Return visible OTP digit inputs, sorted left-to-right when possible."""
-    for selector in OTP_INPUT_SELECTORS:
+    """Return visible OTP digit inputs in stable DOM order (left to right)."""
+    selector = "input[type='tel'][maxlength='1'], input[type='text'][maxlength='1']"
+    try:
+        ordered = driver.execute_script(
+            """
+            const sel = arguments[0];
+            const nodes = Array.from(document.querySelectorAll(sel))
+                .filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0 && el.offsetParent !== null;
+                });
+            nodes.sort((a, b) => {
+                const ra = a.getBoundingClientRect();
+                const rb = b.getBoundingClientRect();
+                if (Math.abs(ra.top - rb.top) > 8) return ra.top - rb.top;
+                return ra.left - rb.left;
+            });
+            return nodes;
+            """,
+            selector,
+        )
+        if ordered:
+            return ordered
+    except Exception:
+        pass
+
+    for css in OTP_INPUT_SELECTORS:
         try:
-            elements = driver.find_elements(By.CSS_SELECTOR, selector)
+            elements = driver.find_elements(By.CSS_SELECTOR, css)
             visible = [el for el in elements if el.is_displayed()]
             if visible:
-                try:
-                    visible.sort(key=lambda el: (el.location.get("y", 0), el.location.get("x", 0)))
-                except Exception:
-                    pass
+                visible.sort(
+                    key=lambda el: (
+                        el.location.get("y", 0),
+                        el.location.get("x", 0),
+                    )
+                )
                 return visible
         except Exception:
             continue
-
-    all_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='tel']")
-    visible_inputs = [
-        inp for inp in all_inputs if inp.is_displayed() and inp.get_attribute("maxlength") == "1"
-    ]
-    if visible_inputs:
-        try:
-            visible_inputs.sort(key=lambda el: (el.location.get("y", 0), el.location.get("x", 0)))
-        except Exception:
-            pass
-    return visible_inputs
+    return []
 
 
 def set_otp_digit(element, digit):
-    """Set one OTP digit and notify React-controlled inputs."""
+    """Set one OTP digit using React-friendly native value + InputEvent."""
     driver.execute_script(
         """
         const el = arguments[0];
         const val = arguments[1];
         el.focus();
-        el.value = val;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        const proto = window.HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+        setter.call(el, val);
+        el.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            data: val,
+            inputType: 'insertText',
+        }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         """,
         element,
@@ -280,30 +306,44 @@ def set_otp_digit(element, digit):
 
 
 def enter_otp_code(otp_inputs, otp_code):
-    """Type OTP into Naukri single- or multi-box fields (one digit per box)."""
-    if len(otp_inputs) >= 6 and len(otp_code) == 6:
-        print(f"[OTP] Entering OTP in {len(otp_inputs)} separate fields...")
-        for i, digit in enumerate(otp_code):
-            if i >= len(otp_inputs):
-                break
-            try:
-                otp_inputs[i].click()
-                time.sleep(0.15)
-                set_otp_digit(otp_inputs[i], digit)
-                otp_inputs[i].send_keys(digit)
-                print(f"[OTP] Entered digit {i + 1}")
-                time.sleep(0.25)
-            except Exception as e:
-                print(f"[OTP] Error entering digit {i + 1}: {e}")
-                set_otp_digit(otp_inputs[i], digit)
-    elif otp_inputs:
-        print("[OTP] Entering OTP in single field...")
-        otp_inputs[0].click()
-        time.sleep(0.3)
-        otp_inputs[0].clear()
-        otp_inputs[0].send_keys(otp_code)
-    else:
-        raise Exception("No OTP input fields found to enter code")
+    """Type OTP one digit per box; re-query inputs each digit for auto-focus UIs."""
+    if len(otp_code) != 6:
+        raise Exception(f"Expected 6-digit OTP, got {len(otp_code)}")
+
+    print("[OTP] Entering OTP in 6 separate fields (react-aware)...")
+    for i, digit in enumerate(otp_code):
+        inputs = collect_visible_otp_inputs()
+        if len(inputs) < 6:
+            raise Exception(f"Expected 6 OTP boxes, found {len(inputs)}")
+        el = inputs[i]
+        try:
+            el.click()
+            time.sleep(0.12)
+            el.send_keys(Keys.BACKSPACE * 2)
+            el.clear()
+            set_otp_digit(el, digit)
+            current = (el.get_attribute("value") or "").strip()
+            if current != digit:
+                el.send_keys(digit)
+            print(f"[OTP] Entered digit {i + 1}: {digit}")
+            time.sleep(0.2)
+        except Exception as e:
+            print(f"[OTP] Error entering digit {i + 1}: {e}")
+            set_otp_digit(el, digit)
+
+
+def enter_otp_via_cdp(otp_inputs, otp_code):
+    """Enter OTP using Chrome DevTools Protocol key injection."""
+    print("[OTP] Entering OTP via CDP key injection...")
+    clear_otp_inputs(collect_visible_otp_inputs())
+    for i, digit in enumerate(otp_code):
+        inputs = collect_visible_otp_inputs()
+        if i >= len(inputs):
+            break
+        inputs[i].click()
+        time.sleep(0.1)
+        driver.execute_cdp_cmd("Input.insertText", {"text": digit})
+        time.sleep(0.15)
 
 
 def enter_otp_via_paste(otp_inputs, otp_code):
@@ -312,8 +352,8 @@ def enter_otp_via_paste(otp_inputs, otp_code):
         enter_otp_code(otp_inputs, otp_code)
         return
     print("[OTP] Entering OTP via paste into first field...")
-    clear_otp_inputs(otp_inputs)
-    first = otp_inputs[0]
+    clear_otp_inputs(collect_visible_otp_inputs())
+    first = collect_visible_otp_inputs()[0]
     first.click()
     time.sleep(0.3)
     ActionChains(driver).click(first).send_keys(otp_code).perform()
@@ -348,30 +388,54 @@ def clear_otp_inputs(otp_inputs):
             pass
 
 
-def click_otp_verify_button():
-    """Click the OTP card Verify button (avoid header/login submit)."""
+def find_otp_verify_button():
     verify_selectors = [
         "//*[contains(translate(., 'ENTER THE OTP', 'enter the otp'), 'enter the otp')]"
         "//button[contains(translate(normalize-space(.), 'VERIFY', 'verify'), 'verify')]",
         "//button[contains(translate(normalize-space(.), 'VERIFY', 'verify'), 'verify') "
         "and not(ancestor::*[contains(@class, 'header')])]",
-        "//button[contains(translate(normalize-space(.), 'SUBMIT', 'submit'), 'submit')]",
-        "//button[contains(translate(normalize-space(.), 'CONTINUE', 'continue'), 'continue')]",
     ]
-
     for selector in verify_selectors:
         try:
-            verify_btn = WebDriverWait(driver, 8).until(
-                EC.element_to_be_clickable((By.XPATH, selector))
+            return WebDriverWait(driver, 8).until(
+                EC.presence_of_element_located((By.XPATH, selector))
             )
+        except Exception:
+            continue
+    return None
+
+
+def wait_for_otp_verify_ready(timeout_seconds=20):
+    """Wait until Naukri enables the Verify button (React accepted OTP)."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        btn = find_otp_verify_button()
+        if not btn:
+            time.sleep(0.5)
+            continue
+        disabled_attr = btn.get_attribute("disabled")
+        aria_disabled = (btn.get_attribute("aria-disabled") or "").lower()
+        class_name = (btn.get_attribute("class") or "").lower()
+        if btn.is_enabled() and disabled_attr is None and aria_disabled not in ("true", "disabled"):
+            if "disabled" not in class_name:
+                return btn
+        time.sleep(0.5)
+    return find_otp_verify_button()
+
+
+def click_otp_verify_button():
+    """Click the OTP card Verify button once it is enabled."""
+    verify_btn = wait_for_otp_verify_ready(timeout_seconds=20)
+    if verify_btn:
+        try:
             driver.execute_script(
                 "arguments[0].scrollIntoView({block: 'center'}); arguments[0].click();",
                 verify_btn,
             )
-            print(f"[OTP] Verify button clicked using selector: {selector}")
+            print("[OTP] Verify button clicked")
             return True
-        except Exception:
-            continue
+        except Exception as e:
+            print(f"[OTP] Verify click failed: {e}")
 
     if otp_inputs := collect_visible_otp_inputs():
         try:
@@ -454,28 +518,40 @@ def click_resend_otp_link():
 def submit_otp_for_verification(otp_code, entry_mode, screenshot_suffix):
     """Enter OTP, click verify, return (logged_in, page_error_snippet)."""
     otp_inputs = collect_visible_otp_inputs()
-    if not otp_inputs:
+    if len(otp_inputs) < 6:
         time.sleep(2)
         otp_inputs = collect_visible_otp_inputs()
-    if not otp_inputs:
-        raise Exception("OTP inputs disappeared before entry")
+    if len(otp_inputs) < 6:
+        raise Exception(f"Expected 6 OTP inputs, found {len(otp_inputs)}")
 
     if entry_mode == "paste":
         enter_otp_via_paste(otp_inputs, otp_code)
+    elif entry_mode == "cdp":
+        enter_otp_via_cdp(otp_inputs, otp_code)
     else:
         enter_otp_code(otp_inputs, otp_code)
 
     otp_inputs = collect_visible_otp_inputs()
-    if otp_inputs and not otp_fields_contain_code(otp_inputs, otp_code):
-        print("[OTP] Fields missing digits after entry — retrying digit mode")
+    if not otp_fields_contain_code(otp_inputs, otp_code):
+        print(f"[OTP] DOM values after {entry_mode}: "
+              f"{[(el.get_attribute('value') or '') for el in otp_inputs[:6]]}")
+        print("[OTP] DOM mismatch — retrying react digit entry")
         clear_otp_inputs(otp_inputs)
         enter_otp_code(otp_inputs, otp_code)
 
+    if not otp_fields_contain_code(collect_visible_otp_inputs(), otp_code):
+        return False, "otp digits not accepted in form fields"
+
     driver.save_screenshot(os.path.join(log_dir, f"step_1_otp_entered_{screenshot_suffix}.png"))
-    if screenshot_suffix == "paste" or screenshot_suffix == "digits_1":
+    if screenshot_suffix.startswith("digits"):
         driver.save_screenshot(os.path.join(log_dir, "step_1_otp_entered.png"))
 
-    time.sleep(2)
+    verify_btn = wait_for_otp_verify_ready(timeout_seconds=15)
+    if verify_btn and not verify_btn.is_enabled():
+        print("[OTP] Verify still disabled — Naukri did not accept OTP in UI state")
+        return False, "verify button disabled"
+
+    time.sleep(1)
     if not click_otp_verify_button():
         print("[OTP] No verify button found - OTP might auto-submit")
 
@@ -493,13 +569,14 @@ def run_otp_verification_flow(login_submit_epoch):
     methods. Naukri resend often does not create a new Gmail message.
     """
     driver.save_screenshot(os.path.join(log_dir, "step_1_otp_prompt.png"))
-    min_received_after = login_submit_epoch - 30
 
-    print("[OTP] Fetching OTP from Gmail API...")
+    print("[OTP] Fetching OTP from Gmail API (email must arrive after login submit)...")
+    login_cutoff_ms = int(login_submit_epoch * 1000)
     session_otp = get_otp_from_gmail(
         sender_filter="naukri.com",
         max_wait_seconds=90,
-        min_received_after=min_received_after,
+        min_received_after=login_submit_epoch - 5,
+        require_internal_date_after_ms=login_cutoff_ms - 2000,
     )
     if not session_otp:
         raise Exception(
@@ -513,7 +590,7 @@ def run_otp_verification_flow(login_submit_epoch):
         f"(Gmail id {session_otp['message_id'][:10]}…, subject: {session_otp['subject']!r})"
     )
 
-    entry_modes = ["paste", "digits", "digits"]
+    entry_modes = ["digits", "cdp", "paste"]
     last_page_error = ""
 
     for idx, mode in enumerate(entry_modes, start=1):
