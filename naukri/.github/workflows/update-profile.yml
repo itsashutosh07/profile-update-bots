@@ -1,55 +1,51 @@
+# Legacy/copy workflow for standalone naukri/ repo layout — keep in sync with repo root workflow.
 name: Update Naukri Profile
 
 on:
   schedule:
-    # Runs every 2 hours
     - cron: '0 */2 * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
-    
+      uses: actions/checkout@v5
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
-    
+        python-version: '3.11'
+        cache: pip
+        cache-dependency-path: requirements.txt
+
     - name: Install Chrome
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget gnupg ca-certificates
+        sudo apt-get install -y wget gnupg xvfb ca-certificates
         sudo install -m 0755 -d /etc/apt/keyrings
         wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
         echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
         sudo apt-get update
         sudo apt-get install -y google-chrome-stable
-    
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    
-    - name: Update headless mode in script
-      run: |
-        sed -i 's/# options.add_argument("--headless=new")/options.add_argument("--headless=new")/' update.py
-    
+
     - name: Run update script
       env:
         NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
         NAUKRI_PASSWORD: ${{ secrets.NAUKRI_PASSWORD }}
-      run: python3 update.py
-    
+      run: xvfb-run -a python3 update.py
+
     - name: Upload screenshots as artifacts
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v5
       with:
         name: screenshots-${{ github.run_number }}
         path: Logs Screenshot/
         retention-days: 7
-
-

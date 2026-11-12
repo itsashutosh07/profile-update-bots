@@ -263,9 +263,10 @@ Your bot runs automatically at:
 
 ### Workflow Fails with Chrome Error
 
-**Solution**: The workflow already installs Chrome. If it fails:
-1. Check the error logs
-2. Try re-running the workflow (sometimes transient issues)
+**Solution**: The workflow installs Google Chrome via apt using a keyring under `/etc/apt/keyrings` (legacy `apt-key` does not exist on newer Ubuntu runners). If install still fails:
+1. Check the error logs on the **Install Chrome** step
+2. Re-run the workflow once (transient mirror issues happen)
+3. Confirm the workflow uses current action versions (`checkout@v5`, `setup-python@v5`, `upload-artifact@v5`) so Node.js 20 deprecation warnings do not block future runner images
 
 ### Cannot Find Workflow File
 
@@ -417,7 +418,7 @@ Edit `.github/workflows/update-profile.yml`:
 
 ```yaml
 - name: Upload screenshots as artifacts
-  uses: actions/upload-artifact@v3
+  uses: actions/upload-artifact@v5
   with:
     name: screenshots-${{ github.run_number }}
     path: Logs Screenshot/
